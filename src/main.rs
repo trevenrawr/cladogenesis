@@ -11,9 +11,10 @@ use csv::Writer;
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct Species {
-  id: usize,          // evolution order, birthdate
+  id: usize,          // ID, evolution order, "birthdate"
   mass: f64,          // mass (g)
   death: usize,       // iteration went (or will go) extinct
+  parent: usize,      // parent's ID
 }
 
 
@@ -61,14 +62,14 @@ fn main() {
     (x.log10() / (1.0 - p).log10()).ceil() as usize
   };
 
-  let mut extant: Vec<(f64, usize)> = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
+  let mut extant: Vec<(f64, usize, usize)> = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
   let doom = doom_timer(x_0);
-  extant.push((x_0, doom));
+  extant.push((x_0, doom, 0));
 
   let mut all_species: Vec<Species> = Vec::with_capacity(0);
   if write_all {
     all_species = Vec::with_capacity(t_max + 1);
-    all_species.push(Species{id: 0, mass: x_0, death: doom});
+    all_species.push(Species{id: 0, mass: x_0, death: doom, parent: 0});
   }
 
 
@@ -78,7 +79,7 @@ fn main() {
   for step in 1..t_max {
     let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
 
-    let (mass_a, _) = extant[ancestor];
+    let (mass_a, _, id_a) = extant[ancestor];
     let l1 = mass_a / x_min;
 
     // Apply Cope's rule, strengthened for smaller species
@@ -100,12 +101,12 @@ fn main() {
 
     let mass_d = mass_a * tt;
     let doom = doom_timer(mass_d) + step;
-    extant.push((mass_d, doom));
-    if write_all { all_species.push(Species{id: step, mass: mass_d, death: doom}); }
+    extant.push((mass_d, doom, step));
+    if write_all { all_species.push(Species{id: step, mass: mass_d, death: doom, parent: id_a}); }
 
     // Retain species whose doom timer is later than when we are now
     // ... that is to say, kill off the now-dead ones
-    extant.retain(|&(_, d)| d > step);
+    extant.retain(|&(_, d, _)| d > step);
   }
 
   // End timing
