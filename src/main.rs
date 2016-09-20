@@ -24,7 +24,7 @@ fn main() {
     .author("Trevor DiMartino")
     .about("A model of random walk evolution, based on Clauset and Erwin 2008")
     .args_from_usage("\
-      -x --min=[x_min]            'Minimum species mass, g (default 1.8)'
+      -m --min=[x_min]            'Minimum species mass, g (default 1.8)'
       -i --initial=[x_0]          'Initial species mass, g (default 40.0)'
       -n --nspecies=[n]           'Estimate of number of species at equilibrium (default 5000)'
       -a --writeall=[write_all]   'Write out birth order, mass, and death time of all species (default true)'")
