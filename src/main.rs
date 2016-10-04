@@ -21,7 +21,7 @@ pub struct Species {
 
 fn main() {
   let args = clap::App::new("Cladogenesis")
-    .version("0.1")
+    .version("0.9.27")
     .author("Trevor DiMartino")
     .about("A model of random walk evolution, based on Clauset and Erwin 2008 and modified to include some new capabilities.")
     .args_from_usage("\
@@ -60,16 +60,41 @@ fn main() {
   let beta = 1.0/(n as f64);    // baseline extinction rate
   let rho = 0.025;              // rate of extinction increase
 
+  // Determines how many more rounds until a species goes extinct
+  // by drawing from a geometric distribution
   let doom_timer = |mass: f64| {
-    // Determines how many more rounds until a species goes extinct
-    // by drawing from a geometric distribution
     let p = (10.0 as f64).powf(rho * mass.log10() + beta.log10());
 
     let x: f64 = random();
     (x.log10() / (1.0 - p).log10()).ceil() as usize
   };
 
-  // Vec<(id, mass, mass floor, extinction "date")>
+  // Takes ancestor mass and returns a new descendant species mass
+  let new_mass = |mass_a: f64, x_min: f64| -> f64 {
+    // Determines the groth factor, mu, determined by Cope's rule
+    // and strengthened for smaller species
+    let mu: f64;
+    if mass_a.log10() < c2 {
+      mu = (-c1 / c2) * mass_a.log10() + c1 + delta;
+    } else {
+      mu = delta;
+    }
+
+    // Draw Monte Carlo factor and enforce min size
+    let l1 = mass_a / x_min;
+    let mut tt: f64 = 0.0;
+    while tt < 1.0 / l1 {
+      let StandardNormal(r) = random();
+      tt = (r * sigma + mu).exp() * 
+        ((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
+        (random::<f64>().powf(alpha));
+    }
+
+    mass_a * tt
+  };
+
+  // Set up our data structures
+  // extant = Vec<(id, mass, mass floor, extinction "date")>
   let mut extant: Vec<(usize, f64, f64, usize)> = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
   let doom = doom_timer(x_0);
   extant.push((1, x_0, x_min, doom));
@@ -97,26 +122,8 @@ fn main() {
       }
     }
 
+    let mass_d = new_mass(mass_a, x_min);
 
-    // Apply Cope's rule, strengthened for smaller species
-    let mu: f64;
-    if mass_a.log10() < c2 {
-      mu = (-c1 / c2) * mass_a.log10() + c1 + delta;
-    } else {
-      mu = delta;
-    }
-
-    // Draw Monte Carlo factor and enforce min size
-    let l1 = mass_a / x_min;
-    let mut tt: f64 = 0.0;
-    while tt < 1.0 / l1 {
-      let StandardNormal(r) = random();
-      tt = (r * sigma + mu).exp() * 
-        ((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
-        (random::<f64>().powf(alpha));
-    }
-
-    let mass_d = mass_a * tt;
     let doom = doom_timer(mass_d) + step;
     extant.push((step, mass_d, x_min, doom));
     if write_all {
