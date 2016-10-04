@@ -32,19 +32,19 @@ fn main() {
       -r --ratchet=[ratchet]      'Turn on ratcheting capability (default false)' ")
     .get_matches();
 
-  let mut x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
+  let x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
   let x_0 = value_t!(args.value_of("initial"), f64).unwrap_or(40.0);
   let n = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
   let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
   let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(false);
 
   // Ratchet mechanisms
-  let r_prob: f64 = 0.0002;   // Probability of a ratchet occurrance (placeholder)
-  let r_magnitude: f64 = 0.1;   // 10% increase as result of ratchet (placeholder)
+  let r_prob: f64 = 0.001;   // Probability of a ratchet occurrance (placeholder)
+  //let r_magnitude: f64 = 0.1;   // 10% increase as result of ratchet (placeholder)
 
   // Determine how many steps to run
   let nu = 1.6;       // mean species lifetime (My)
-  let tau = 60.0;     // total simulation time (My)
+  let tau = 500.0;     // total simulation time (My)
   let t_max: usize = ((tau / nu) * (n as f64)).ceil() as usize;
 
   // Cope's Rule parameters
@@ -56,9 +56,9 @@ fn main() {
   let sigma = 0.63;   // variance
   let alpha = 0.30;   // power-law tail
 
-  // Extinctino parameters
+  // Extinction parameters
   let beta = 1.0/(n as f64);    // baseline extinction rate
-  let rho = 0.025;              // rate of extinction increase
+  let rho = 0.025;               // rate of extinction increase
 
   // Determines how many more rounds until a species goes extinct
   // by drawing from a geometric distribution
@@ -101,7 +101,7 @@ fn main() {
 
   let mut all_species: Vec<Species> = Vec::with_capacity(0);
   if write_all {
-    all_species = Vec::with_capacity(t_max + 1);
+    all_species = Vec::with_capacity(2 * t_max + 1);
     all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
   }
 
@@ -109,36 +109,88 @@ fn main() {
   // Start timing
   let start = time::precise_time_ns();
 
-  for step in 1..t_max {
+  let mut step = 2;
+  while step < t_max {
     let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
 
-    let (id_a, mass_a, min, _) = extant[ancestor];
-    x_min = min;
+    let (id_a, mass_a, min_a, _) = extant[ancestor];
+
+
+    ////////////////////////////////////////////////////////////////
+    // Spawn a new species!
+    let mass_d = new_mass(mass_a, min_a);
 
     // See if we've evolved a floor-raising characteristic
+    let min_d: f64;
     if ratchet {
       if random::<f64>() < r_prob {
-        x_min = x_min * (1.0 + r_magnitude);
+        // If we get a ratchet, new mass floor is ancestor mass
+        min_d = mass_a;
+      } else {
+        // Else, the min remains the min of the ancestor
+        min_d = min_a;
       }
+    } else {
+      min_d = min_a;
     }
 
-    let mass_d = new_mass(mass_a, x_min);
-
     let doom = doom_timer(mass_d) + step;
-    extant.push((step, mass_d, x_min, doom));
+
+    extant.push((step, mass_d, min_d, doom));
     if write_all {
       all_species.push(Species{
-        id: step + 1,
+        id: step,
         mass: mass_d,
-        min_mass: x_min,
+        min_mass: min_d,
+        death: doom,
+        parent: id_a
+      });
+    }
+    ////////////////////////////////////////////////////////////////
+
+
+    ////////////////////////////////////////////////////////////////
+    // Do it again!
+    step = step + 1;
+
+    let mass_d = new_mass(mass_a, min_a);
+
+    // See if we've evolved a floor-raising characteristic
+    let min_d: f64;
+    if ratchet {
+      if random::<f64>() < r_prob {
+        // If we get a ratchet, new mass floor is ancestor mass
+        min_d = mass_a;
+      } else {
+        // Else, the min remains the min of the ancestor
+        min_d = min_a;
+      }
+    } else {
+      min_d = min_a;
+    }
+
+    let doom = doom_timer(mass_d) + step;
+
+    extant.push((step, mass_d, min_d, doom));
+    if write_all {
+      all_species.push(Species{
+        id: step,
+        mass: mass_d,
+        min_mass: min_d,
         death: doom,
         parent: id_a
       });
     }
 
+    // Set ancestor to die this round
+    extant[ancestor] = (id_a, mass_a, min_a, step);
+    ////////////////////////////////////////////////////////////////
+
+
     // Retain species whose doom timer is later than when we are now
     // ... that is to say, kill off the now-dead ones
-    extant.retain(|&(_, _, _, d)| d > step);
+    extant.retain(|&(_, _, _, d)| d >= step);
+    step = step + 1;
   }
 
   // End timing

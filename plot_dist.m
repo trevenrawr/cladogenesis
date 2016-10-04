@@ -3,7 +3,7 @@ function plot_dist( x )
     [y, edges] = histcounts(x, edges, 'Normalization', 'probability');
     scatter(edges(1:end-1), y, 'filled', 'd');
     set(gca, 'xscale', 'log');
-    %set(gca, 'yscale', 'log');
+    set(gca, 'yscale', 'log');
     xlim([0 10^8]);
         xlabel('Species mass, g');
         ylabel('Proportion');
