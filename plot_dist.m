@@ -5,6 +5,6 @@ function plot_dist( x )
     set(gca, 'xscale', 'log');
     set(gca, 'yscale', 'log');
     xlim([0 10^8]);
-        xlabel('Species mass, g');
-        ylabel('Proportion');
+    xlabel('Species mass, g');
+    ylabel('Proportion');
 end

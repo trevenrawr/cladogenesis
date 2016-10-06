@@ -29,18 +29,18 @@ fn main() {
       -i --initial=[x_0]          'Initial species mass, g (default 40.0)'
       -n --nspecies=[n]           'Estimate of number of species at equilibrium (default 5000)'
       -a --writeall=[write_all]   'Write out birth order, mass, and death time of all species (default true)'
-      -r --ratchet=[ratchet]      'Turn on ratcheting capability (default false)' ")
+      -r --ratchet=[ratchet]      'Turn on ratcheting capability (default true)'
+      -p --r_prob=[r_prob]        'Probability of a ratchet trait evolving (default 0.0001)' ")
     .get_matches();
 
   let x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
   let x_0 = value_t!(args.value_of("initial"), f64).unwrap_or(40.0);
   let n = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
   let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
-  let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(false);
+  let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
+  let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.0001);
 
-  // Ratchet mechanisms
-  let r_prob: f64 = 0.001;   // Probability of a ratchet occurrance (placeholder)
-  //let r_magnitude: f64 = 0.1;   // 10% increase as result of ratchet (placeholder)
+  //let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
   // Determine how many steps to run
   let nu = 1.6;       // mean species lifetime (My)
