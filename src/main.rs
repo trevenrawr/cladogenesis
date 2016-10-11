@@ -6,16 +6,18 @@ extern crate rustc_serialize;
 extern crate clap;
 
 use rand::random;
+use std::collections::{HashMap, BinaryHeap};
+use std::collections::hash_map::Entry;
 use rand::distributions::normal::StandardNormal;
 use csv::Writer;
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct Species {
-  id: usize,          // ID, evolution order, "birthdate"
+  id: i64,          // ID, evolution order, "birthdate"
   mass: f64,          // mass (g)
   min_mass: f64,      // mass floor
-  death: usize,       // iteration went (or will go) extinct
-  parent: usize,      // parent's ID
+  death: i64,       // iteration went (or will go) extinct
+  parent: i64,      // parent's ID
 }
 
 
@@ -42,10 +44,11 @@ fn main() {
 
   //let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
-  // Determine how many steps to run
+  // Determine how many n_ss to run
   let nu = 1.6;       // mean species lifetime (My)
   let tau = 500.0;     // total simulation time (My)
-  let t_max: usize = ((tau / nu) * (n as f64)).ceil() as usize;
+  let t_max = ((tau / nu) * (n as f64)).ceil() as i64;
+  println!("Set to run for {} iterations", t_max);
 
   // Cope's Rule parameters
   let c1 = 0.33;      // log-lambda intercept
@@ -66,7 +69,7 @@ fn main() {
     let p = (10.0 as f64).powf(rho * mass.log10() + beta.log10());
 
     let x: f64 = random();
-    (x.log10() / (1.0 - p).log10()).ceil() as usize
+    (x.log10() / (1.0 - p).log10()).ceil() as i64
   };
 
   // Takes ancestor mass and returns a new descendant species mass
@@ -94,103 +97,97 @@ fn main() {
   };
 
   // Set up our data structures
-  // extant = Vec<(id, mass, mass floor, extinction "date")>
-  let mut extant: Vec<(usize, f64, f64, usize)> = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
+  // extant = HashMap<extinction "date", Vec<(id, mass, mass floor)>>
+  // timer = BinaryHeap<usize> keeps the priority queue of death dates to come next
+  let mut extant: HashMap<i64, Vec<(i64, f64, f64)>> = HashMap::with_capacity((n as f64 * 1.5).ceil() as usize);
+  let mut timer = BinaryHeap::with_capacity((n as f64 * 1.5) as usize);
+
   let doom = doom_timer(x_0);
-  extant.push((1, x_0, x_min, doom));
+  //println!("First doom timer is {}", doom);
+
+  timer.push(-doom);
+  {
+    let descendant = extant.entry(doom).or_insert(Vec::new());
+    descendant.push((1, x_0, x_min));
+  }
 
   let mut all_species: Vec<Species> = Vec::with_capacity(0);
   if write_all {
-    all_species = Vec::with_capacity(2 * t_max + 1);
+    all_species = Vec::with_capacity(2 * t_max as usize + 1);
     all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
   }
 
 
-  // Start timing
+  // Start timing (for reflection)
   let start = time::precise_time_ns();
 
-  let mut step = 2;
-  while step < t_max {
-    let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+  // We start with our total number of species to be 1; the supreme ancestor, above
+  let mut n_s = 1;
+  while n_s < t_max && !timer.is_empty() {
+    // Get the (negative) time from our timer
+    let t = -timer.pop().unwrap();
+    let r = -t;
+    //println!("Now serving time t = {}", t);
+    while !timer.is_empty() && &r == timer.peek().unwrap() {
+      // Pop any duplicate values
+      timer.pop();
+    }
 
-    let (id_a, mass_a, min_a, _) = extant[ancestor];
-
-
-    ////////////////////////////////////////////////////////////////
-    // Spawn a new species!
-    let mass_d = new_mass(mass_a, min_a);
-
-    // See if we've evolved a floor-raising characteristic
-    let min_d: f64;
-    if ratchet {
-      if random::<f64>() < r_prob {
-        // If we get a ratchet, new mass floor is ancestor mass
-        min_d = mass_a;
-      } else {
-        // Else, the min remains the min of the ancestor
-        min_d = min_a;
-      }
+    // Pull our ancestors vector from the HashMap
+    let ancestors = if let Entry::Occupied(o) = extant.entry(t) {
+      o.remove()
     } else {
-      min_d = min_a;
-    }
+      panic!("There's no entry in extant for {}", t);
+    };
 
-    let doom = doom_timer(mass_d) + step;
+    for (id_a, mass_a, min_a) in ancestors {
+      let p_spec = 1.0 - (0.5 / n as f64) * extant.len() as f64;
 
-    extant.push((step, mass_d, min_d, doom));
-    if write_all {
-      all_species.push(Species{
-        id: step,
-        mass: mass_d,
-        min_mass: min_d,
-        death: doom,
-        parent: id_a
-      });
-    }
-    ////////////////////////////////////////////////////////////////
+      // Check to see if this extinction spurred a speciation event
+      if random::<f64>() < p_spec {
 
+        // If we speciate, we speciate twice
+        for _ in 0..2 {
+          // We're now working on creating this new species
+          n_s += 1;
 
-    ////////////////////////////////////////////////////////////////
-    // Do it again!
-    step = step + 1;
+          if n_s % 10000 == 0 { println!("Running species {}", n_s); }
 
-    let mass_d = new_mass(mass_a, min_a);
-
-    // See if we've evolved a floor-raising characteristic
-    let min_d: f64;
-    if ratchet {
-      if random::<f64>() < r_prob {
-        // If we get a ratchet, new mass floor is ancestor mass
-        min_d = mass_a;
-      } else {
-        // Else, the min remains the min of the ancestor
-        min_d = min_a;
+          let mass_d = new_mass(mass_a, min_a);
+    
+          // See if we've evolved a floor-raising characteristic
+          let min_d: f64;
+          if ratchet {
+            if random::<f64>() < r_prob {
+              // If we get a ratchet, new mass floor is ancestor mass
+              min_d = mass_a;
+            } else {
+              // Else, the min remains the min of the ancestor
+              min_d = min_a;
+            }
+          } else {
+            min_d = min_a;
+          }
+    
+          let doom = doom_timer(mass_d) + t;
+          //println!("Species {} will die at {}", n_s, doom);
+          
+          timer.push(-doom);
+          let descendant = extant.entry(doom).or_insert(Vec::new());
+          descendant.push((n_s, mass_d, min_d));
+    
+          if write_all {
+            all_species.push(Species{
+              id: n_s,
+              mass: mass_d,
+              min_mass: min_d,
+              death: doom,
+              parent: id_a
+            });
+          }
+        }
       }
-    } else {
-      min_d = min_a;
     }
-
-    let doom = doom_timer(mass_d) + step;
-
-    extant.push((step, mass_d, min_d, doom));
-    if write_all {
-      all_species.push(Species{
-        id: step,
-        mass: mass_d,
-        min_mass: min_d,
-        death: doom,
-        parent: id_a
-      });
-    }
-
-    // Set ancestor to die this round
-    extant[ancestor] = (id_a, mass_a, min_a, step);
-    ////////////////////////////////////////////////////////////////
-
-
-    // Retain species whose doom timer is later than when we are now
-    // ... that is to say, kill off the now-dead ones
-    extant.retain(|&(_, _, _, d)| d >= step);
-    step = step + 1;
   }
 
   // End timing
@@ -199,12 +196,13 @@ fn main() {
   // Print out our final set of extant species
   let path = format!("extant_{}_{}_{}.csv", x_min, x_0, n);
   let mut writer = Writer::from_file(path).unwrap();
-  for s in extant.into_iter() {
-    writer.encode(s).ok().expect("CSV writer error");
+  for (_, s) in extant.into_iter() {
+    for ss in s {
+      writer.encode(ss).ok().expect("CSV writer error");
+    }
   }
 
   if write_all {
-    // All species from the HashMap
     let path = format!("all_{}_{}_{}.csv", x_min, x_0, n);
     let mut writer = Writer::from_file(path).unwrap();
     for s in all_species.into_iter() {
