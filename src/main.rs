@@ -105,16 +105,26 @@ fn main() {
 		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
 	}
 
+	fn choose_anc(n_s: usize, extant: &mut Vec<(usize, f64, f64, usize)>) -> (usize, (usize, f64, f64, usize)) {
+		loop {
+			let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+			let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
+			if doom_a <= n_s {
+				extant.remove(ancestor);
+			} else {
+				return (ancestor, (id_a, mass_a, min_a, doom_a));
+			}
+		}
+	}
+
 
 	// Start timing
 	let start = time::precise_time_ns();
 
 	let mut n_s = 1;
-	while n_s <= t_max {
-		let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-
-		let (id_a, mass_a, min_a, _) = extant[ancestor];
-
+	let mut step = 1;
+	while step <= t_max {
+		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant);
 
 		for _ in 0..2 {
 			n_s += 1;
@@ -135,7 +145,7 @@ fn main() {
 				min_d = min_a;
 			}
 
-			let doom = doom_timer(mass_d) + n_s;
+			let doom = doom_timer(mass_d) + step;
 
 			extant.push((n_s, mass_d, min_d, doom));
 			if write_all {
@@ -149,12 +159,13 @@ fn main() {
 			}
 		}
 
-		extant[ancestor] = (id_a, mass_a, min_a, n_s);
+		extant.remove(ancestor);
 
-		// Retain species whose doom timer is later than when we are now
-		// ... that is to say, kill off the now-dead ones
-		extant.retain(|&(_, _, _, d)| d >= n_s);
+		step += 1;
 	}
+
+	// Go through the list once and clean it up by removing everything that's dead
+	extant.retain(|&(_, _, _, d)| d >= step);
 
 	// End timing
 	let end = time::precise_time_ns();
