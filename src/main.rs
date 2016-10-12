@@ -94,8 +94,8 @@ fn main() {
 	};
 
 	// Set up our data structures
-	// extant = Vec<(id, mass, mass floor, extinction "date")>
-	let mut extant: Vec<(usize, f64, f64, usize)> = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
+	// extant: Vec<(id, mass, mass floor, extinction "date")>
+	let mut extant = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
 	let doom = doom_timer(x_0);
 	extant.push((1, x_0, x_min, doom));
 

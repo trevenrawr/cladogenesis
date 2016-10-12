@@ -4,7 +4,7 @@ function plot_dist( x )
     scatter(edges(1:end-1), y, 'filled', 'd');
     set(gca, 'xscale', 'log');
     set(gca, 'yscale', 'log');
-    xlim([0 10^8]);
+    xlim([0 10^10]);
     xlabel('Species mass, g');
     ylabel('Proportion');
 end
