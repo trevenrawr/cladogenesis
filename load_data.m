@@ -9,5 +9,5 @@ figure;
 plot_dist(m(:, 2));
 
 plot_clade_largest(m);
-%plot_clade_dists(m);
+plot_clade_dists(m);
 plot_clade_sizes(m);
