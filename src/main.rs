@@ -109,8 +109,9 @@ fn main() {
 	// Start timing
 	let start = time::precise_time_ns();
 
+	// We spawn two new species per "time step," thus the 2 * t_max
 	let mut n_s = 1;
-	while n_s <= t_max {
+	while n_s <= (2 * t_max) {
 		let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
 
 		let (id_a, mass_a, min_a, _) = extant[ancestor];
