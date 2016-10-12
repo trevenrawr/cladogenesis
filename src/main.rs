@@ -141,7 +141,8 @@ fn main() {
     };
 
     for (id_a, mass_a, min_a) in ancestors {
-      let p_spec = 1.0 - (0.5 / n as f64) * extant.len() as f64;
+      let p_spec_base = 0.5 * 0.95f64.powi(extant.len() as i32) + 0.5;
+      let p_spec = p_spec_base ;
 
       // Check to see if this extinction spurred a speciation event
       if random::<f64>() < p_spec {
@@ -151,7 +152,7 @@ fn main() {
           // We're now working on creating this new species
           n_s += 1;
 
-          if n_s % 10000 == 0 { println!("Running species {}", n_s); }
+          //if n_s % 10000 == 0 { println!("Running species {}", n_s); }
 
           let mass_d = new_mass(mass_a, min_a);
     
