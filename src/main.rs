@@ -117,7 +117,6 @@ fn main() {
 
 		let (id_a, mass_a, min_a, _) = extant[ancestor];
 
-
 		for _ in 0..2 {
 			n_s += 1;
 
@@ -162,7 +161,6 @@ fn main() {
 	// End timing
 	let end = time::precise_time_ns();
 	println!("Ran model for {} species in {} seconds.", n_s, (end - start) / 1000000000);
-	let start = time::precise_time_ns();
 
 	// Print out our final set of extant species
 	let path = format!("extant_{}_{}_{}.csv", x_min, x_0, n);
@@ -170,9 +168,6 @@ fn main() {
 	for s in extant.into_iter() {
 		writer.encode(s).ok().expect("CSV writer error");
 	}
-	// End timing
-	let end = time::precise_time_ns();
-	println!("Saved extant in {} seconds.", (end - start) / 1000000000);
 
 	if write_all {
 		let start = time::precise_time_ns();
