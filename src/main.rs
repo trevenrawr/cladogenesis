@@ -117,6 +117,10 @@ fn main() {
 		}
 	}
 
+	fn cleanup(ancestor: usize; extant: &mut Vec<(usize, f64, f64, usize)>) {
+		extant.remove(ancestor);
+	}
+
 
 	// Start timing
 	let start = time::precise_time_ns();
@@ -159,7 +163,7 @@ fn main() {
 			}
 		}
 
-		extant.remove(ancestor);
+		cleanup(ancestor, &mut extant);
 
 		step += 1;
 	}
