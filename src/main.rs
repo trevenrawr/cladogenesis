@@ -85,9 +85,9 @@ fn main() {
 		let mut tt: f64 = 0.0;
 		while tt < 1.0 / l1 {
 			let StandardNormal(r) = random();
-			tt = (r * sigma + mu).exp() * 
-			((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
-			(random::<f64>().powf(alpha));
+			tt = (r * sigma + mu).exp(); //* 
+			//((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
+			//(random::<f64>().powf(alpha));
 		}
 
 		mass_a * tt
@@ -128,7 +128,7 @@ fn main() {
 			if ratchet {
 				if random::<f64>() < r_prob {
 					// If we get a ratchet, new mass floor is ancestor mass
-					min_d = mass_a;
+					min_d = mass_d;
 				} else {
 					// Else, the min remains the min of the ancestor
 					min_d = min_a;
