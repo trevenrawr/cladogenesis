@@ -105,6 +105,12 @@ fn main() {
 		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
 	}
 
+	fn choose_anc(step: usize, extant: &mut Vec<(usize, f64, f64, usize)>) -> (usize, (usize, f64, f64, usize)) {
+		let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+
+		(ancestor, extant[ancestor])
+	}
+
 
 	// Start timing
 	let start = time::precise_time_ns();
@@ -113,10 +119,7 @@ fn main() {
 	let mut n_s = 1;
 	let mut step = 1;
 	while step <= t_max {
-		let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-
-		let (id_a, mass_a, min_a, _) = extant[ancestor];
-
+		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant);
 
 		for _ in 0..2 {
 			n_s += 1;
