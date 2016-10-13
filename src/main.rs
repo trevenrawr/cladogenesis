@@ -48,7 +48,6 @@ fn main() {
   let nu = 1.6;       // mean species lifetime (My)
   let tau = 500.0;     // total simulation time (My)
   let t_max = ((tau / nu) * (n as f64)).ceil() as i64;
-  println!("Set to run for {} iterations", t_max);
 
   // Cope's Rule parameters
   let c1 = 0.33;      // log-lambda intercept
@@ -123,9 +122,10 @@ fn main() {
 
   // We start with our total number of species to be 1; the supreme ancestor, above
   let mut n_s = 1;
+  let mut t = 0;
   while n_s < t_max && !timer.is_empty() {
     // Get the (negative) time from our timer
-    let t = -timer.pop().unwrap();
+    t = -timer.pop().unwrap();
     let r = -t;
     //println!("Now serving time t = {}", t);
     while !timer.is_empty() && &r == timer.peek().unwrap() {
@@ -193,6 +193,7 @@ fn main() {
 
   // End timing
   let end = time::precise_time_ns();
+  println!("Ran model for {} species in {} seconds.", n_s, (end - start) as f64 / 1000000000.0);
 
   // Print out our final set of extant species
   let path = format!("extant_{}_{}_{}.csv", x_min, x_0, n);
@@ -211,5 +212,4 @@ fn main() {
     }
   }
 
-  println!("Ran in {} seconds.", (end - start) / 1000000000);
 }
