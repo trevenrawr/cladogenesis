@@ -87,9 +87,9 @@ fn main() {
     let mut tt: f64 = 0.0;
     while tt < 1.0 / l1 {
       let StandardNormal(r) = random();
-      tt = (r * sigma + mu).exp() * 
-        ((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
-        (random::<f64>().powf(alpha));
+      tt = (r * sigma + mu).exp(); //* 
+        //((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
+        //(random::<f64>().powf(alpha));
     }
 
     mass_a * tt
