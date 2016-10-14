@@ -25,12 +25,13 @@ fn main() {
 	.author("Trevor DiMartino")
 	.about("A model of random walk evolution, based on Clauset and Erwin 2008 and modified to include some new capabilities.")
 	.args_from_usage("\
-		-m --min=[x_min]            'Minimum species mass, g (default 1.8)'
-		-i --initial=[x_0]          'Initial species mass, g (default 40.0)'
-		-n --nspecies=[n]           'Estimate of number of species at equilibrium (default 5000)'
-		-a --writeall=[write_all]   'Write out birth order, mass, and death time of all species (default true)'
-		-r --ratchet=[ratchet]      'Turn on ratcheting capability (default true)'
-		-p --r_prob=[r_prob]        'Probability of a ratchet trait evolving (default 0.0001)' ")
+		-m --min=[x_min]						'Minimum species mass, g (default 1.8)'
+		-i --initial=[x_0]					'Initial species mass, g (default 40.0)'
+		-n --nspecies=[n]						'Estimate of number of species at equilibrium (default 5000)'
+		-a --writeall=[write_all]			'Write out birth order, mass, and death time of all species (default true)'
+		-r --ratchet=[ratchet]				'Turn on ratcheting capability (default true)'
+		-p --r_prob=[r_prob]					'Probability of a ratchet trait evolving (default 0.0001)'
+		-s --model_style=[model_style]	'Choose model style (default 1)' ")
 	.get_matches();
 
 	let x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
@@ -39,6 +40,7 @@ fn main() {
 	let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
 	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.0001);
+	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
@@ -85,9 +87,9 @@ fn main() {
 		let mut tt: f64 = 0.0;
 		while tt < 1.0 / l1 {
 			let StandardNormal(r) = random();
-			tt = (r * sigma + mu).exp() * 
-			((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
-			(random::<f64>().powf(alpha));
+			tt = (r * sigma + mu).exp(); //* 
+			//((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
+			//(random::<f64>().powf(alpha));
 		}
 
 		mass_a * tt
@@ -105,26 +107,54 @@ fn main() {
 		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
 	}
 
-	fn choose_anc(n_s: usize, extant: &mut Vec<(usize, f64, f64, usize)>) -> (usize, (usize, f64, f64, usize)) {
-		loop {
+	let choose_anc = |n_s: usize, extant: &mut Vec<(usize, f64, f64, usize)>| -> (usize, (usize, f64, f64, usize)) {
+		let mut ca1 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
 			let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-			let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
-			if doom_a <= n_s {
-				extant.remove(ancestor);
-			} else {
-				return (ancestor, (id_a, mass_a, min_a, doom_a));
-			}
-		}
-	}
+			(ancestor, extant[ancestor])
+		};
 
-	fn cleanup(ancestor: usize; extant: &mut Vec<(usize, f64, f64, usize)>) {
-		extant.remove(ancestor);
-	}
+		let mut ca2 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
+			loop {
+				let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+				let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
+				if doom_a <= n_s {
+					extant.remove(ancestor);
+				} else {
+					return (ancestor, (id_a, mass_a, min_a, doom_a));
+				}
+			}
+		};
+
+		match model_style {
+			1 => ca1(extant),
+			2 => ca2(extant),
+			_ => panic!("Model Style is invalid."),
+		}
+	};
+
+	let cleanup = |ancestor: usize, extant: &mut Vec<(usize, f64, f64, usize)>, step: usize| {
+		let mut cu1 = |extant: &mut Vec<(usize, f64, f64, usize)>, step: usize| {
+			// Retain species whose doom timer is later than when we are now
+			// ... that is to say, kill off the now-dead ones
+			extant.retain(|&(_, _, _, d)| d >= step);
+		};
+
+		let mut cu2 = |ancestor: usize, extant: &mut Vec<(usize, f64, f64, usize)>| {
+			extant.remove(ancestor);
+		};
+
+		match model_style {
+			1 => cu1(extant, step),
+			2 => cu2(ancestor, extant),
+			_ => panic!("Model Style is invalid."),
+		}
+	};
 
 
 	// Start timing
 	let start = time::precise_time_ns();
 
+	// We spawn two new species per "time step," thus the 2 * t_max
 	let mut n_s = 1;
 	let mut step = 1;
 	while step <= t_max {
@@ -140,7 +170,7 @@ fn main() {
 			if ratchet {
 				if random::<f64>() < r_prob {
 					// If we get a ratchet, new mass floor is ancestor mass
-					min_d = mass_a;
+					min_d = mass_d;
 				} else {
 					// Else, the min remains the min of the ancestor
 					min_d = min_a;
@@ -162,8 +192,10 @@ fn main() {
 				});
 			}
 		}
+		
+		extant[ancestor] = (id_a, mass_a, min_a, step);
 
-		cleanup(ancestor, &mut extant);
+		cleanup(ancestor, &mut extant, step);
 
 		step += 1;
 	}
@@ -173,24 +205,20 @@ fn main() {
 
 	// End timing
 	let end = time::precise_time_ns();
-	println!("Ran model for {} species in {} seconds.", n_s, (end - start) / 1000000000);
-	let start = time::precise_time_ns();
+	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) / 1000000000);
 
 	// Print out our final set of extant species
-	let path = format!("extant_{}_{}_{}.csv", x_min, x_0, n);
+	let path = format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n);
 	let mut writer = Writer::from_file(path).unwrap();
 	for s in extant.into_iter() {
 		writer.encode(s).ok().expect("CSV writer error");
 	}
-	// End timing
-	let end = time::precise_time_ns();
-	println!("Saved extant in {} seconds.", (end - start) / 1000000000);
 
 	if write_all {
 		let start = time::precise_time_ns();
 
 		// All species from the HashMap
-		let path = format!("all_{}_{}_{}.csv", x_min, x_0, n);
+		let path = format!("all_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n);
 		let mut writer = Writer::from_file(path).unwrap();
 		for s in all_species.into_iter() {
 			writer.encode(s).ok().expect("CSV writer error");
