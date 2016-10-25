@@ -6,7 +6,7 @@ from datetime import datetime
 import itertools
 sns.set(style='white', palette='muted', color_codes=True)
 
-model = 3
+model = 4
 min = 1.8
 x_0 = 40
 n = 5000
@@ -24,7 +24,16 @@ t_edges = np.linspace(0, t_max, num=1000)
 to_time = lambda x: (x - 1) / 2
 
 
-def plot_dist( x ):
+def plot_extant_dist( ):
+	big_start = datetime.now()
+	print('Starting to plot all_species mass distribution.')
+
+	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
+		header=None,
+		names=['birth', 'mass', 'm_min', 'death'])
+
+	x = extant_species['mass']
+
 	sns.plt.figure()
 	m_dist = np.histogram(x, bins=m_edges, density=True)[0]
 	ax = sns.distplot(x, norm_hist=1, bins=m_edges, kde=False)
@@ -35,8 +44,30 @@ def plot_dist( x ):
 	sns.plt.ylabel('proportion')
 	sns.plt.title('all species that ever lived')
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
+
+def plot_dist( x ):
+	big_start = datetime.now()
+	print('Starting to plot all_species mass distribution.')
+
+	sns.plt.figure()
+	m_dist = np.histogram(x, bins=m_edges, density=True)[0]
+	ax = sns.distplot(x, norm_hist=1, bins=m_edges, kde=False)
+	ax.scatter(m_edges[:-1], m_dist, marker='D')
+	sns.plt.xscale('log')
+	sns.plt.yscale('log')
+	sns.plt.xlabel('species mass, g')
+	sns.plt.ylabel('proportion')
+	sns.plt.title('all species that ever lived')
+
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_dists( m ):
+	big_start = datetime.now()
+	print('Starting to plot clade-wise mass distribution.')
+
 	x_mins = m['m_min'].unique()
 	cutoff = 500
 
@@ -57,8 +88,13 @@ def plot_clade_dists( m ):
 	sns.plt.ylabel('proportion')
 	sns.plt.title('clades with over {} species'.format(cutoff))
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_largest( m ):
+	big_start = datetime.now()
+	print('Starting to plot largest mass in clade over time.')
+
 	x_mins = m['m_min'].unique()
 
 	fig = sns.plt.figure()
@@ -72,7 +108,7 @@ def plot_clade_largest( m ):
 			if masses[ii + 1] < masses[ii]:
 				masses[ii + 1] = masses[ii]
 
-		ax.plot(clade['birth'], masses, linewidth=lw)
+		ax.plot(to_time(clade['birth']), masses, linewidth=lw)
 		lw = 0.5
 
 	sns.plt.yscale('log')
@@ -80,8 +116,13 @@ def plot_clade_largest( m ):
 	sns.plt.ylabel('largest mass in clade')
 	sns.plt.title('largest species seen to date, by clade')
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_largest_wdist( m ):
+	big_start = datetime.now()
+	print('Starting to plot largest mass in clade over time, with x_min distribution.')
+
 	x_mins = m['m_min'].unique()
 
 	g = sns.JointGrid(x='id', y='m_min', data=x_mins)
@@ -94,7 +135,7 @@ def plot_clade_largest_wdist( m ):
 			if masses[ii + 1] < masses[ii]:
 				masses[ii + 1] = masses[ii]
 
-		g.ax_joint.plot(clade['birth'], masses, linewidth=lw)
+		g.ax_joint.plot(to_time(clade['birth']), masses, linewidth=lw)
 		lw = 0.5
 
 	g.ax_marg_x.set_axis_off()
@@ -103,10 +144,12 @@ def plot_clade_largest_wdist( m ):
 	sns.plt.yscale('log')
 	g.set_axis_labels('model time', 'largest mass in clade, g')
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_n_extant( m ):
 	big_start = datetime.now()
-	print('Starting to plot n extant.')
+	print('Starting to plot n extant over time.')
 
 	x_mins = m['m_min'].unique()
 
@@ -156,14 +199,17 @@ def plot_clade_n_extant( m ):
 		ax.plot(t_edges, n_extant, linewidth=lw)
 		lw = 0.5
 
-	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
-
 	sns.plt.xlabel('model time')
 	sns.plt.ylabel('number of extant species')
 	sns.plt.title('extant species over time, by clade')
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_sizes( m ):
+	big_start = datetime.now()
+	print('Starting to plot sizes of clades.')
+
 	x_mins = m['m_min'].unique()
 
 	clade_sizes = [len(m[m['m_min'] == x_min].index) for x_min in x_mins]
@@ -178,8 +224,13 @@ def plot_clade_sizes( m ):
 	g.fig.suptitle('sizes of {} clades'.format(len(x_mins)))
 	g.set_axis_labels('minimum size for clade', 'total species in clade, over all time')
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 def plot_clade_spawnrate( m ):
+	big_start = datetime.now()
+	print('Starting to plot clade spawn rates.')
+
 	x_mins = m['m_min'].unique()
 
 	fig = sns.plt.figure()
@@ -198,17 +249,19 @@ def plot_clade_spawnrate( m ):
 	sns.plt.xlabel('model time')
 	sns.plt.ylabel('speciation rate (spec appearing per {:.0f} model steps)'.format(t_edges[1]))
 
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
 
 # def plot_n_extant( m ):
 # 	extants = np.zeros((to_time(len(m.index)), 1))
 
 
 
-#plot_dist(all_species['mass'])
+plot_dist(all_species['mass'])
 #plot_clade_dists(all_species)
 plot_clade_largest(all_species)
 #plot_clade_largest_wdist(all_species)
 #plot_clade_n_extant(all_species)
-#plot_clade_sizes(all_species)
+plot_clade_sizes(all_species)
 plot_clade_spawnrate(all_species)
 sns.plt.show()

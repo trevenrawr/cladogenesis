@@ -41,12 +41,14 @@ fn main() {
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
 	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.0001);
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
+
 	//// model_styles:
 	// 1. Use "retain" to clean up extant
 	// 2. Discard extant species upon random selection if they're already dead
 	// 3. Drop a meteor on the extant set halfway through simulation, use M1 mechanics
 	let m_bias = 0.9;
 	// 4. Increase ratchet probability during the initial radiation phase of the model
+	let r_prob_radiation = 0.5;
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
@@ -177,7 +179,12 @@ fn main() {
 			// See if we've evolved a floor-raising characteristic
 			let min_d: f64;
 			if ratchet {
-				if random::<f64>() < r_prob {
+				let r_eff = if model_style == 4 && n_s < n {
+					r_prob_radiation
+				} else {
+					r_prob
+				};
+				if random::<f64>() < r_eff {
 					// If we get a ratchet, new mass floor is ancestor mass
 					min_d = mass_d;
 				} else {
@@ -260,7 +267,7 @@ fn main() {
 
 	// End timing
 	let end = time::precise_time_ns();
-	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) / 1000000000);
+	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) / 1000000000.0);
 
 	// Print out our final set of extant species
 	let path = format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n);
@@ -280,7 +287,7 @@ fn main() {
 		}
 
 		let end = time::precise_time_ns();
-		println!("Saved all in {} seconds.", (end - start) / 1000000000);
+		println!("Saved all in {} seconds.", (end - start) / 1000000000.0);
 	}
 
 }
