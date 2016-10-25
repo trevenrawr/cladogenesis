@@ -41,6 +41,12 @@ fn main() {
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
 	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.0001);
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
+	//// model_styles:
+	// 1. Use "retain" to clean up extant
+	// 2. Discard extant species upon random selection if they're already dead
+	// 3. Drop a meteor on the extant set halfway through simulation, use M1 mechanics
+	let m_bias = 0.9;
+	// 4. Increase ratchet probability during the initial radiation phase of the model
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
@@ -71,6 +77,21 @@ fn main() {
 		(x.log10() / (1.0 - p).log10()).ceil() as usize
 	};
 
+	// Set up our data structures
+	// extant: Vec<(id, mass, mass floor, extinction "date")>
+	let mut extant = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
+	let doom = doom_timer(x_0);
+	extant.push((1, x_0, x_min, doom));
+
+	let mut all_species: Vec<Species> = Vec::with_capacity(0);
+	if write_all {
+		all_species = Vec::with_capacity(2 * t_max + 1);
+		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
+	}
+
+	////////////////////////////////////////////////////////////////////////////
+	/////   important functions   //////////////////////////////////////////////
+
 	// Takes ancestor mass and returns a new descendant species mass
 	let new_mass = |mass_a: f64, x_min: f64| -> f64 {
 		// Determines the groth factor, mu, determined by Cope's rule
@@ -95,18 +116,6 @@ fn main() {
 		mass_a * tt
 	};
 
-	// Set up our data structures
-	// extant: Vec<(id, mass, mass floor, extinction "date")>
-	let mut extant = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
-	let doom = doom_timer(x_0);
-	extant.push((1, x_0, x_min, doom));
-
-	let mut all_species: Vec<Species> = Vec::with_capacity(0);
-	if write_all {
-		all_species = Vec::with_capacity(2 * t_max + 1);
-		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
-	}
-
 	let choose_anc = |n_s: usize, extant: &mut Vec<(usize, f64, f64, usize)>| -> (usize, (usize, f64, f64, usize)) {
 		let mut ca1 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
 			let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
@@ -126,9 +135,8 @@ fn main() {
 		};
 
 		match model_style {
-			1 => ca1(extant),
 			2 => ca2(extant),
-			_ => panic!("Model Style is invalid."),
+			_ => ca1(extant),
 		}
 	};
 
@@ -144,11 +152,11 @@ fn main() {
 		};
 
 		match model_style {
-			1 => cu1(extant, step),
 			2 => cu2(ancestor, extant),
-			_ => panic!("Model Style is invalid."),
+			_ => cu1(extant, step),
 		}
 	};
+	////////////////////////////////////////////////////////////////////////////
 
 
 	// Start timing
@@ -160,6 +168,7 @@ fn main() {
 	while step <= t_max {
 		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant);
 
+		// Spawn two descendant species
 		for _ in 0..2 {
 			n_s += 1;
 
@@ -193,15 +202,61 @@ fn main() {
 			}
 		}
 		
+		// Set the ancestor species to die in cleanup.
 		extant[ancestor] = (id_a, mass_a, min_a, step);
 
+		// If we are told to, check if we're halfway through the sim, an drop a meteor
+		if model_style == 3 {
+			if step == t_max / 2 {
+				// Drop a meteor!
+				let mut killed = 0;
+				for ii in 0..extant.len() {
+					let (id_a, mass_a, min_a, _) = extant[ii];
+
+					let p_dead = if min_a == x_min {
+						// It's part of the seed clade
+						0.5 * (1.0 + m_bias)
+					} else {
+						0.5 * m_bias
+					};
+
+					if random::<f64>() < p_dead {
+						extant[ii] = (id_a, mass_a, min_a, step);
+
+						if write_all {
+							// Log, in all_species, that they died now due to meteor
+							let spec = all_species[id_a - 1].clone();
+
+							// Sanity check!
+							assert_eq!(mass_a, spec.mass);
+
+							all_species[id_a - 1] = Species{
+									id: spec.id,
+									mass: spec.mass,
+									min_mass: spec.min_mass,
+									death: step,
+									parent: spec.parent
+								};
+						}
+
+						killed += 1;
+					}
+				}
+
+				println!("A meteor fell and killed off {} out of {} species.", killed, extant.len());
+			}
+		}
+
+		// Clean up extant, depending on the model 
 		cleanup(ancestor, &mut extant, step);
 
 		step += 1;
 	}
 
-	// Go through the list once and clean it up by removing everything that's dead
-	extant.retain(|&(_, _, _, d)| d >= step);
+	if model_style == 2 {
+		// Go through the list once and clean it up by removing everything that's dead
+		extant.retain(|&(_, _, _, d)| d >= step);
+	}
 
 	// End timing
 	let end = time::precise_time_ns();
