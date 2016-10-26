@@ -6,7 +6,7 @@ from datetime import datetime
 import itertools
 sns.set(style='white', palette='muted', color_codes=True)
 
-model = 4
+model = 5
 min = 1.8
 x_0 = 40
 n = 5000

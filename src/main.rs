@@ -2,12 +2,14 @@ extern crate rand;
 extern crate time;
 extern crate csv;
 extern crate rustc_serialize;
+extern crate pbr;
 #[macro_use]
 extern crate clap;
 
 use rand::random;
 use rand::distributions::normal::StandardNormal;
 use csv::Writer;
+use pbr::ProgressBar;
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct Species {
@@ -45,17 +47,25 @@ fn main() {
 	//// model_styles:
 	// 1. Use "retain" to clean up extant
 	// 2. Discard extant species upon random selection if they're already dead
-	// 3. Drop a meteor on the extant set halfway through simulation, use M1 mechanics
-	let m_bias = 0.9;
+	// 3. Drop a meteor on the extant set halfway through simulation
+		// Multiplier for "meteor" (climate change?) bias against seed clade
+		let m_bias = 0.9;
 	// 4. Increase ratchet probability during the initial radiation phase of the model
-	let r_prob_radiation = 0.5;
+		// Probability of ratchet during seed radiation phase
+		let r_prob_radiation = 0.5;
+	// 5. Promote radiation phase for recently ratcheted species
+		// Probability of not accepting a non-recently ratcheted species during promotion phase
+		let radiation_preference = 1.00;
+		// How long a recently ratcheted species gets preference, in model steps
+		let radiation_duration = 100;
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
 	// Determine how many n_ss to run
 	let nu = 1.6;       // mean species lifetime (My)
 	let tau = 500.0;     // total simulation time (My)
-	let t_max: usize = ((tau / nu) * (n as f64)).ceil() as usize;
+	let t_max: usize = 25000;
+	// let t_max = ((tau / nu) * (n as f64)).ceil() as usize;
 
 	// Cope's Rule parameters
 	let c1 = 0.33;      // log-lambda intercept
@@ -64,7 +74,7 @@ fn main() {
 
 	// Monte Carlo distribution parameters
 	let sigma = 0.63;   // variance
-	let alpha = 0.30;   // power-law tail
+	//let alpha = 0.30;   // power-law tail
 
 	// Extinction parameters
 	let beta = 1.0/(n as f64);    // baseline extinction rate
@@ -118,7 +128,7 @@ fn main() {
 		mass_a * tt
 	};
 
-	let choose_anc = |n_s: usize, extant: &mut Vec<(usize, f64, f64, usize)>| -> (usize, (usize, f64, f64, usize)) {
+	let choose_anc = |step: usize, extant: &mut Vec<(usize, f64, f64, usize)>, rec_rat: (f64, usize)| -> (usize, (usize, f64, f64, usize)) {
 		let mut ca1 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
 			let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
 			(ancestor, extant[ancestor])
@@ -128,7 +138,7 @@ fn main() {
 			loop {
 				let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
 				let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
-				if doom_a <= n_s {
+				if doom_a <= step {
 					extant.remove(ancestor);
 				} else {
 					return (ancestor, (id_a, mass_a, min_a, doom_a));
@@ -136,8 +146,44 @@ fn main() {
 			}
 		};
 
+		// Use for model_style 5
+		let mut ca5 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
+			let mut choices = 0;
+			loop {
+				let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+				let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
+
+				// If the last ratchet wasn't recent, take whoever we chose
+				if step > rec_rat.1 {
+					return (ancestor, (id_a, mass_a, min_a, doom_a));
+
+				// If the last ratchet was recent and we chose a species of the promoted clade
+				} else if min_a == rec_rat.0 {
+					return (ancestor, (id_a, mass_a, min_a, doom_a));
+
+				// If the last ratchet was recent and we chose a species not of that clade
+				} else {
+					// Check to see if it squeaks by, probabalistically
+					if random::<f64>() < radiation_preference {
+						continue;
+					} else {
+						return (ancestor, (id_a, mass_a, min_a, doom_a));
+					}
+				}
+				choices += 1;
+
+				if choices > extant.len() * 5 {
+					println!("Can't find a suitable ancestor.");
+					println!("rr_expire = {}", rec_rat.1);
+					println!("rr_mass = {}", rec_rat.0);
+					panic!("Throwing in the towel; ancestor must not exist.");
+				}
+			}
+		};
+
 		match model_style {
 			2 => ca2(extant),
+			5 => ca5(extant),
 			_ => ca1(extant),
 		}
 	};
@@ -161,14 +207,17 @@ fn main() {
 	////////////////////////////////////////////////////////////////////////////
 
 
-	// Start timing
 	let start = time::precise_time_ns();
 
-	// We spawn two new species per "time step," thus the 2 * t_max
 	let mut n_s = 1;
 	let mut step = 1;
+	let mut recent_ratchet = (x_min, step);  // Used for model_style 5
+
+	let mut pb = ProgressBar::new(t_max as u64);
+
 	while step <= t_max {
-		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant);
+		pb.inc();
+		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant, recent_ratchet);
 
 		// Spawn two descendant species
 		for _ in 0..2 {
@@ -179,14 +228,19 @@ fn main() {
 			// See if we've evolved a floor-raising characteristic
 			let min_d: f64;
 			if ratchet {
+				// Update ratchet probabilty during initial radiation, if proper model is selected
 				let r_eff = if model_style == 4 && n_s < n {
 					r_prob_radiation
 				} else {
 					r_prob
 				};
+
 				if random::<f64>() < r_eff {
 					// If we get a ratchet, new mass floor is ancestor mass
 					min_d = mass_d;
+					if model_style == 5 {
+						recent_ratchet = (min_d, step + radiation_duration)
+					}
 				} else {
 					// Else, the min remains the min of the ancestor
 					min_d = min_a;
@@ -212,7 +266,7 @@ fn main() {
 		// Set the ancestor species to die in cleanup.
 		extant[ancestor] = (id_a, mass_a, min_a, step);
 
-		// If we are told to, check if we're halfway through the sim, an drop a meteor
+		// If we are told to, check if we're halfway through the sim, and drop a meteor
 		if model_style == 3 {
 			if step == t_max / 2 {
 				// Drop a meteor!
@@ -267,7 +321,8 @@ fn main() {
 
 	// End timing
 	let end = time::precise_time_ns();
-	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) / 1000000000.0);
+	// pb.finish_print("Complete");
+	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
 
 	// Print out our final set of extant species
 	let path = format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n);
@@ -287,7 +342,7 @@ fn main() {
 		}
 
 		let end = time::precise_time_ns();
-		println!("Saved all in {} seconds.", (end - start) / 1000000000.0);
+		println!("Saved all in {} seconds.", (end - start) as f64 / 1000000000.0);
 	}
 
 }
