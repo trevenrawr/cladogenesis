@@ -9,7 +9,7 @@ extern crate clap;
 use rand::random;
 use rand::distributions::normal::StandardNormal;
 use csv::Writer;
-use pbr::ProgressBar;
+//use pbr::ProgressBar;
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct Species {
@@ -55,17 +55,17 @@ fn main() {
 		let r_prob_radiation = 0.5;
 	// 5. Promote radiation phase for recently ratcheted species
 		// Probability of not accepting a non-recently ratcheted species during promotion phase
-		let radiation_preference = 1.00;
+		let radiation_preference = 1.00;		// Default: 1.00
 		// How long a recently ratcheted species gets preference, in model steps
-		let radiation_duration = 100;
+		let radiation_duration = 100;			// Default: 100
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
 	// Determine how many n_ss to run
 	let nu = 1.6;       // mean species lifetime (My)
 	let tau = 500.0;     // total simulation time (My)
-	let t_max: usize = 25000;
-	// let t_max = ((tau / nu) * (n as f64)).ceil() as usize;
+	// let t_max: usize = 25000;
+	let t_max = ((tau / nu) * (n as f64)).ceil() as usize;
 
 	// Cope's Rule parameters
 	let c1 = 0.33;      // log-lambda intercept
@@ -93,12 +93,24 @@ fn main() {
 	// extant: Vec<(id, mass, mass floor, extinction "date")>
 	let mut extant = Vec::with_capacity((n as f64 * 1.5).ceil() as usize);
 	let doom = doom_timer(x_0);
-	extant.push((1, x_0, x_min, doom));
+	extant.push(Species{
+		id: 1,
+		mass: x_0,
+		min_mass: x_min,
+		death: doom,
+		parent: 0,
+	});
 
 	let mut all_species: Vec<Species> = Vec::with_capacity(0);
 	if write_all {
 		all_species = Vec::with_capacity(2 * t_max + 1);
-		all_species.push(Species{id: 1, mass: x_0, min_mass: x_min, death: doom, parent: 0});
+		all_species.push(Species{
+			id: 1, 
+			mass: x_0, 
+			min_mass: x_min, 
+			death: doom, 
+			parent: 0
+		});
 	}
 
 	////////////////////////////////////////////////////////////////////////////
@@ -128,38 +140,38 @@ fn main() {
 		mass_a * tt
 	};
 
-	let choose_anc = |step: usize, extant: &mut Vec<(usize, f64, f64, usize)>, rec_rat: (f64, usize)| -> (usize, (usize, f64, f64, usize)) {
-		let mut ca1 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
-			let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-			(ancestor, extant[ancestor])
+	let choose_anc = |step: usize, extant: &mut Vec<Species>, rec_rat: (f64, usize)| -> (usize, Species) {
+		let mut ca1 = |extant: &mut Vec<Species>| {
+			let ancestor_loc: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+			(ancestor_loc, extant[ancestor_loc].clone())
 		};
 
-		let mut ca2 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
+		let mut ca2 = |extant: &mut Vec<Species>| {
 			loop {
-				let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-				let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
-				if doom_a <= step {
-					extant.remove(ancestor);
+				let ancestor_loc: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+				let ancestor = extant[ancestor_loc].clone();
+				if ancestor.death <= step {
+					extant.remove(ancestor_loc);
 				} else {
-					return (ancestor, (id_a, mass_a, min_a, doom_a));
+					return (ancestor_loc, ancestor);
 				}
 			}
 		};
 
 		// Use for model_style 5
-		let mut ca5 = |extant: &mut Vec<(usize, f64, f64, usize)>| {
+		let mut ca5 = |extant: &mut Vec<Species>| {
 			let mut choices = 0;
 			loop {
-				let ancestor: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-				let (id_a, mass_a, min_a, doom_a) = extant[ancestor];
+				let ancestor_loc: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+				let ancestor = extant[ancestor_loc].clone();
 
 				// If the last ratchet wasn't recent, take whoever we chose
 				if step > rec_rat.1 {
-					return (ancestor, (id_a, mass_a, min_a, doom_a));
+					return (ancestor_loc, ancestor);
 
 				// If the last ratchet was recent and we chose a species of the promoted clade
-				} else if min_a == rec_rat.0 {
-					return (ancestor, (id_a, mass_a, min_a, doom_a));
+				} else if ancestor.min_mass == rec_rat.0 {
+					return (ancestor_loc, ancestor);
 
 				// If the last ratchet was recent and we chose a species not of that clade
 				} else {
@@ -167,7 +179,7 @@ fn main() {
 					if random::<f64>() < radiation_preference {
 						continue;
 					} else {
-						return (ancestor, (id_a, mass_a, min_a, doom_a));
+						return (ancestor_loc, ancestor);
 					}
 				}
 				choices += 1;
@@ -188,19 +200,19 @@ fn main() {
 		}
 	};
 
-	let cleanup = |ancestor: usize, extant: &mut Vec<(usize, f64, f64, usize)>, step: usize| {
-		let mut cu1 = |extant: &mut Vec<(usize, f64, f64, usize)>, step: usize| {
+	let cleanup = |ancestor_loc: usize, extant: &mut Vec<Species>, step: usize| {
+		let mut cu1 = |extant: &mut Vec<Species>, step: usize| {
 			// Retain species whose doom timer is later than when we are now
 			// ... that is to say, kill off the now-dead ones
-			extant.retain(|&(_, _, _, d)| d >= step);
+			extant.retain(|species| species.death >= step);
 		};
 
-		let mut cu2 = |ancestor: usize, extant: &mut Vec<(usize, f64, f64, usize)>| {
-			extant.remove(ancestor);
+		let mut cu2 = |ancestor_loc: usize, extant: &mut Vec<Species>| {
+			extant.remove(ancestor_loc);
 		};
 
 		match model_style {
-			2 => cu2(ancestor, extant),
+			2 => cu2(ancestor_loc, extant),
 			_ => cu1(extant, step),
 		}
 	};
@@ -213,17 +225,17 @@ fn main() {
 	let mut step = 1;
 	let mut recent_ratchet = (x_min, step);  // Used for model_style 5
 
-	let mut pb = ProgressBar::new(t_max as u64);
+	//let mut pb = ProgressBar::new(t_max as u64);
 
 	while step <= t_max {
-		pb.inc();
-		let (ancestor, (id_a, mass_a, min_a, _)) = choose_anc(step, &mut extant, recent_ratchet);
+		//pb.inc();
+		let (ancestor_loc, ancestor) = choose_anc(step, &mut extant, recent_ratchet);
 
 		// Spawn two descendant species
 		for _ in 0..2 {
 			n_s += 1;
 
-			let mass_d = new_mass(mass_a, min_a);
+			let mass_d = new_mass(ancestor.mass, ancestor.min_mass);
 
 			// See if we've evolved a floor-raising characteristic
 			let min_d: f64;
@@ -243,28 +255,41 @@ fn main() {
 					}
 				} else {
 					// Else, the min remains the min of the ancestor
-					min_d = min_a;
+					min_d = ancestor.min_mass;
 				}
 			} else {
-				min_d = min_a;
+				min_d = ancestor.min_mass;
 			}
 
 			let doom = doom_timer(mass_d) + step;
 
-			extant.push((n_s, mass_d, min_d, doom));
+			extant.push(Species{
+				id: n_s, 
+				mass: mass_d, 
+				min_mass: min_d, 
+				death: doom,
+				parent: ancestor.id,
+			});
+
 			if write_all {
 				all_species.push(Species{
 					id: n_s,
 					mass: mass_d,
 					min_mass: min_d,
 					death: doom,
-					parent: id_a
+					parent: ancestor.id,
 				});
 			}
 		}
 		
 		// Set the ancestor species to die in cleanup.
-		extant[ancestor] = (id_a, mass_a, min_a, step);
+		extant[ancestor_loc] = Species{
+			id: ancestor.id,
+			mass: ancestor.mass,
+			min_mass: ancestor.min_mass,
+			death: step,
+			parent: ancestor.parent,
+		};
 
 		// If we are told to, check if we're halfway through the sim, and drop a meteor
 		if model_style == 3 {
@@ -272,9 +297,9 @@ fn main() {
 				// Drop a meteor!
 				let mut killed = 0;
 				for ii in 0..extant.len() {
-					let (id_a, mass_a, min_a, _) = extant[ii];
+					let species = extant[ii].clone();
 
-					let p_dead = if min_a == x_min {
+					let p_dead = if species.min_mass == x_min {
 						// It's part of the seed clade
 						0.5 * (1.0 + m_bias)
 					} else {
@@ -282,16 +307,22 @@ fn main() {
 					};
 
 					if random::<f64>() < p_dead {
-						extant[ii] = (id_a, mass_a, min_a, step);
+						extant[ii] = Species{
+							id: species.id,
+							mass: species.mass,
+							min_mass: species.min_mass,
+							death: step,
+							parent: species.parent,
+						};
 
 						if write_all {
 							// Log, in all_species, that they died now due to meteor
-							let spec = all_species[id_a - 1].clone();
+							let spec = all_species[species.id - 1].clone();
 
 							// Sanity check!
-							assert_eq!(mass_a, spec.mass);
+							assert_eq!(species.mass, spec.mass);
 
-							all_species[id_a - 1] = Species{
+							all_species[species.id - 1] = Species{
 									id: spec.id,
 									mass: spec.mass,
 									min_mass: spec.min_mass,
@@ -309,20 +340,20 @@ fn main() {
 		}
 
 		// Clean up extant, depending on the model 
-		cleanup(ancestor, &mut extant, step);
+		cleanup(ancestor_loc, &mut extant, step);
 
 		step += 1;
 	}
 
 	if model_style == 2 {
 		// Go through the list once and clean it up by removing everything that's dead
-		extant.retain(|&(_, _, _, d)| d >= step);
+		extant.retain(|species| species.death >= step);
 	}
 
 	// End timing
 	let end = time::precise_time_ns();
-	// pb.finish_print("Complete");
-	println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
+	//pb.finish_print("Complete");
+	println!("\nRan Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
 
 	// Print out our final set of extant species
 	let path = format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n);

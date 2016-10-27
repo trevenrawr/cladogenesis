@@ -26,11 +26,11 @@ to_time = lambda x: (x - 1) / 2
 
 def plot_extant_dist( ):
 	big_start = datetime.now()
-	print('Starting to plot all_species mass distribution.')
+	print('Starting to plot extant mass distribution.')
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['birth', 'mass', 'm_min', 'death'])
+		names=['birth', 'mass', 'm_min', 'death', 'ancestor'])
 
 	x = extant_species['mass']
 
@@ -42,7 +42,7 @@ def plot_extant_dist( ):
 	sns.plt.yscale('log')
 	sns.plt.xlabel('species mass, g')
 	sns.plt.ylabel('proportion')
-	sns.plt.title('all species that ever lived')
+	sns.plt.title('extant species at simulation termination')
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
 
@@ -258,6 +258,7 @@ def plot_clade_spawnrate( m ):
 
 
 plot_dist(all_species['mass'])
+plot_extant_dist()
 #plot_clade_dists(all_species)
 plot_clade_largest(all_species)
 #plot_clade_largest_wdist(all_species)
