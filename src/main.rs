@@ -52,7 +52,7 @@ fn main() {
 		let m_bias = 0.9;
 	// 4. Increase ratchet probability during the initial radiation phase of the model
 		// Probability of ratchet during seed radiation phase
-		let r_prob_radiation = 0.5;
+		let r_prob_radiation = 0.25;
 	// 5. Promote radiation phase for recently ratcheted species
 		// Probability of not accepting a non-recently ratcheted species during promotion phase
 		let radiation_preference = 1.00;		// Default: 1.00
@@ -74,7 +74,7 @@ fn main() {
 
 	// Monte Carlo distribution parameters
 	let sigma = 0.63;   // variance
-	//let alpha = 0.30;   // power-law tail
+	let alpha = 0.30;   // power-law tail
 
 	// Extinction parameters
 	let beta = 1.0/(n as f64);    // baseline extinction rate
@@ -133,8 +133,8 @@ fn main() {
 		while tt < 1.0 / l1 {
 			let StandardNormal(r) = random();
 			tt = (r * sigma + mu).exp(); //* 
-			//((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
-			//(random::<f64>().powf(alpha));
+			// ((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
+			// (random::<f64>().powf(alpha));
 		}
 
 		mass_a * tt
