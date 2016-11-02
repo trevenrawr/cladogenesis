@@ -47,7 +47,7 @@ fn main() {
   // Determine how many n_ss to run
   let nu = 1.6;       // mean species lifetime (My)
   let tau = 500.0;     // total simulation time (My)
-  let t_max = ((tau / nu) * (n as f64)).ceil() as i64;
+  let t_max = (((tau / nu) * (n as f64)).ceil() / 4.0) as i64;
 
   // Cope's Rule parameters
   let c1 = 0.33;      // log-lambda intercept
@@ -196,7 +196,7 @@ fn main() {
   println!("Ran model for {} species in {} seconds.", n_s, (end - start) as f64 / 1000000000.0);
 
   // Print out our final set of extant species
-  let path = format!("extant_{}_{}_{}.csv", x_min, x_0, n);
+  let path = format!("extant_ecm1_{}_{}_{}.csv", x_min, x_0, n);
   let mut writer = Writer::from_file(path).unwrap();
   for (_, s) in extant.into_iter() {
     for ss in s {
@@ -205,7 +205,7 @@ fn main() {
   }
 
   if write_all {
-    let path = format!("all_{}_{}_{}.csv", x_min, x_0, n);
+    let path = format!("all_ecm1_{}_{}_{}.csv", x_min, x_0, n);
     let mut writer = Writer::from_file(path).unwrap();
     for s in all_species.into_iter() {
       writer.encode(s).ok().expect("CSV writer error");
