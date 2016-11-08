@@ -1,3 +1,7 @@
 target
 *.csv
+<<<<<<< HEAD
 *.txt
+=======
+*.txt
+>>>>>>> master

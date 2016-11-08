@@ -317,7 +317,8 @@ def plot_clade_spawnrate( m ):
 
 def plot_clade_extrate( m ):
 	big_start = datetime.now()
-	print('Starting to plot clade spawn rates.')
+
+	print('Starting to plot clade extinction rates.')
 
 	x_mins = m['m_min'].unique()
 
@@ -328,8 +329,9 @@ def plot_clade_extrate( m ):
 	for x_min in x_mins:
 		clade = m[m['m_min'] == x_min]
 
-		births = list(map(to_time, clade['death'].tolist()))
-		bd_dist  = np.histogram(births, bins=t_edges)[0]
+		deaths = list(clade['death'].tolist())
+		bd_dist  = np.histogram(deaths, bins=t_edges)[0]
+
 
 		ax.plot(t_edges[:-1], bd_dist, linewidth=lw)
 		lw = 1.0
@@ -340,19 +342,56 @@ def plot_clade_extrate( m ):
 	sns.despine()
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
-# def plot_n_extant( m ):
-# 	extants = np.zeros((to_time(len(m.index)), 1))
+
+
+def plot_clade_n_from_rate( m ):
+	big_start = datetime.now()
+	print('Starting to plot clade extant counts from spawn and death rates.')
+
+	x_mins = m['m_min'].unique()
+
+	fig = sns.plt.figure()
+	ax = fig.add_subplot(111)
+
+	lw = 2.0
+	for x_min in x_mins:
+		clade = m[m['m_min'] == x_min]
+
+		deaths = list(clade['death'].tolist())
+		d_dist  = np.histogram(deaths, bins=t_edges)[0]
+
+		births = list(map(to_time, clade['birth'].tolist()))
+		b_dist  = np.histogram(births, bins=t_edges)[0]
+
+		bd_dist = b_dist - d_dist
+
+		last_n = 0
+		n_extant = []
+		for bd in bd_dist:
+			n_extant.append(last_n + bd / 2)
+			last_n = last_n + bd / 2
+
+		ax.plot(t_edges[:-1], n_extant, linewidth=lw)
+		lw = 1.0
+
+	sns.plt.xlabel('model time')
+	sns.plt.ylabel('number of extant species, by group'.format(t_edges[1]))
+	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.despine()
+
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
 
 
 
 # plot_dist(all_species['mass'])
 # plot_extant_dist()
-#plot_extant_dist_w_MOM()
-#plot_clade_dists(all_species)
+# plot_extant_dist_w_MOM()
+# plot_clade_dists(all_species)
 # plot_clade_largest(all_species)
-#plot_clade_largest_wdist(all_species)
+# plot_clade_largest_wdist(all_species)
 # plot_clade_n_extant(all_species)
 # plot_clade_sizes(all_species)
 plot_clade_spawnrate(all_species)
 plot_clade_extrate(all_species)
+plot_clade_n_from_rate(all_species)
 sns.plt.show()
