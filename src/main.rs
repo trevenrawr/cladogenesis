@@ -58,6 +58,10 @@ fn main() {
 		let radiation_preference = 1.00;		// Default: 1.00
 		// How long a recently ratcheted species gets preference, in model steps
 		let radiation_duration = 100;			// Default: 100
+	// 6. Create new niche-spaces for some ratchets
+		// How likely it is that a ratchet lets the species (and therefore descendants) into a new (latent) nichespace
+		let r_niche_prob = 0.1;					// Default: 0.1?
+
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
@@ -253,6 +257,13 @@ fn main() {
 					if model_style == 5 {
 						recent_ratchet = (min_d, step + radiation_duration)
 					}
+
+					// If we are allowing new nichespaces...
+					if model_style == 6 {
+						if random::<f64>() < r_niche_prob {
+							
+						}
+					}
 				} else {
 					// Else, the min remains the min of the ancestor
 					min_d = ancestor.min_mass;
@@ -303,7 +314,7 @@ fn main() {
 						// It's part of the seed clade
 						0.5 * (1.0 + m_bias)
 					} else {
-						0.5 * m_bias
+						0.5 * (1.0 - m_bias)
 					};
 
 					if random::<f64>() < p_dead {
