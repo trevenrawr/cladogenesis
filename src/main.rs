@@ -13,7 +13,8 @@ use csv::Writer;
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct Species {
-	id: usize,          // ID, evolution order, "birthdate"
+	id: usize,          // ID, evolution order
+	birth: usize,		  // birthdate
 	mass: f64,          // mass (g)
 	min_mass: f64,      // mass floor
 	death: usize,       // iteration went (or will go) extinct
@@ -99,6 +100,7 @@ fn main() {
 	let doom = doom_timer(x_0);
 	extant.push(Species{
 		id: 1,
+		birth: 0,
 		mass: x_0,
 		min_mass: x_min,
 		death: doom,
@@ -110,6 +112,7 @@ fn main() {
 		all_species = Vec::with_capacity(2 * t_max + 1);
 		all_species.push(Species{
 			id: 1, 
+			birth: 0,
 			mass: x_0, 
 			min_mass: x_min, 
 			death: doom, 
@@ -276,6 +279,7 @@ fn main() {
 
 			extant.push(Species{
 				id: n_s, 
+				birth: step,
 				mass: mass_d, 
 				min_mass: min_d, 
 				death: doom,
@@ -285,6 +289,7 @@ fn main() {
 			if write_all {
 				all_species.push(Species{
 					id: n_s,
+					birth: step,
 					mass: mass_d,
 					min_mass: min_d,
 					death: doom,
@@ -296,6 +301,7 @@ fn main() {
 		// Set the ancestor species to die in cleanup.
 		extant[ancestor_loc] = Species{
 			id: ancestor.id,
+			birth: ancestor.birth,
 			mass: ancestor.mass,
 			min_mass: ancestor.min_mass,
 			death: step,
@@ -320,6 +326,7 @@ fn main() {
 					if random::<f64>() < p_dead {
 						extant[ii] = Species{
 							id: species.id,
+							birth: species.birth,
 							mass: species.mass,
 							min_mass: species.min_mass,
 							death: step,
@@ -335,6 +342,7 @@ fn main() {
 
 							all_species[species.id - 1] = Species{
 									id: spec.id,
+									birth: spec.birth,
 									mass: spec.mass,
 									min_mass: spec.min_mass,
 									death: step,

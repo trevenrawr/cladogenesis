@@ -13,7 +13,7 @@ n = 5000
 
 all_species = pd.read_csv('all_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 	header=None,
-	names=['birth', 'mass', 'm_min', 'death', 'ancestor'])
+	names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor'])
 
 n_max = len(all_species.index)
 t_max = (n_max - 1) / 2
@@ -30,7 +30,7 @@ def plot_extant_dist( ):
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['birth', 'mass', 'm_min', 'death', 'ancestor'])
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor'])
 
 	x = extant_species['mass']
 
@@ -62,7 +62,7 @@ def plot_extant_dist_w_MOM( ):
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['birth', 'mass', 'm_min', 'death', 'ancestor'])
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor'])
 
 	x = extant_species['mass']
 
