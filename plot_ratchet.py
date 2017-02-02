@@ -194,7 +194,7 @@ def plot_clade_largest( m ):
 	ax = fig.add_subplot(111)
 
 	lw = 2.0
-	for x_min in x_mins:
+	for x_min in x_mins[0:1]:
 		clade = m[m['m_min'] == x_min]
 		masses = clade['mass'].tolist()
 		for ii in range(len(masses) - 1):
@@ -203,6 +203,7 @@ def plot_clade_largest( m ):
 
 		ax.plot(to_time(clade['id']), masses, linewidth=lw)
 		lw = 1.0
+
 
 	sns.plt.yscale('log')
 	sns.plt.xlabel('model time')
@@ -217,6 +218,10 @@ def plot_clade_largest( m ):
 def plot_clade_largest_extant( m ):
 	big_start = datetime.now()
 	print('Starting to plot largest (extant) mass in clade over time.')
+
+	# Erase the last file
+	f = open('fallbacks.txt', 'w')
+	f.close()
 
 	x_mins = m['m_min'].unique()
 
@@ -256,7 +261,6 @@ def plot_clade_largest_extant( m ):
 		# Iterate chronologically through the clade
 		for ii in range(len(masses) - 1):
 			sys.stdout.write('\r')
-			# the exact output you're looking for:
 			percent = ii / len(masses)
 			sys.stdout.write('[{:50}] {:06.2f}%'.format('='*int(percent*50), 100*percent))
 			sys.stdout.flush()
@@ -292,6 +296,10 @@ def plot_clade_largest_extant( m ):
 								#  largest extant species after one dies off.  We can start our search here instead of
 								#  at the beginning next time and save LOTS of time.  (Hopefully!)
 								last_largest_extant_fallback = jj
+								f = open('fallbacks.txt', 'a')
+								f.write(str(clade['id'].iloc[jj]) + '\n')
+								f.close()
+								# print('First hit: {}'.format(clade['id'].iloc[jj]))
 								first_catch = False
 
 				if largest_extant_index > 0:
@@ -300,9 +308,9 @@ def plot_clade_largest_extant( m ):
 					last_largest_death = clade['death'].iloc[largest_extant_index]
 					# print('Found next largest.  Index: {}, dies at {}'.format(largest_extant_index, last_largest_death))
 				else:
-					events.append(last_largest_death)
-					largest.append(0)
-					print('Clade has died off...???')
+					# events.append(last_largest_death)
+					# largest.append(0)
+					print('\nClade has died off???  Currently {}; last largest died: {}'.format(births[ii + 1], last_largest_death))
 
 
 			# If the next species is larger than the last lasrgest, insert a point
@@ -325,6 +333,70 @@ def plot_clade_largest_extant( m ):
 	sns.plt.ylabel('largest mass in clade')
 	sns.plt.title('largest extant species, by clade')
 	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.despine()
+
+	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
+
+
+def plot_clade_largest_extant_downsample( m ):
+	big_start = datetime.now()
+	print('Starting to plot largest extant over time.')
+
+	x_mins = m['m_min'].unique()
+
+	fig = sns.plt.figure()
+	ax = fig.add_subplot(111)
+	
+	lw = 2.0
+	for x_min in x_mins[0:1]:
+		start = datetime.now()
+
+		clade = m[m['m_min'] == x_min]
+		n_clade = len(clade.index)
+		print('Working on x_min = {}; Clade has {} species.'.format(x_min, n_clade))
+
+		largest = np.zeros((len(t_edges), 1))
+		last_largest_extant_fallback = 0
+
+		seen = False
+		ii = 0
+		for t in t_edges:
+			sys.stdout.write('\r')
+			percent = ii / len(t_edges)
+			sys.stdout.write('[{:50}] {:06.2f}%'.format('='*int(percent*50), 100*percent))
+			sys.stdout.flush()
+
+			largest_extant = 0
+			for jj in range(last_largest_extant_fallback, n_clade - 1):
+				if to_time(clade['id'].iloc[jj]) <= t and clade['death'].iloc[jj] >= t:
+					# if not seen:
+						# last_largest_extant_fallback = jj
+
+					if clade['mass'].iloc[jj] > largest_extant:
+						largest_extant = clade['mass'].iloc[jj]
+				# If this species' birthday is past time t, then all following b-days will be too
+				elif clade['id'].iloc[jj] > t:
+					break
+
+			largest[ii] = largest_extant
+
+			# If we've seen a member of the clade, its reign has begun
+			if largest_extant > 0:
+				seen = True
+			# If we have seen the clade and now it had died off, move on to next clade
+			# if seen and largest_extant == 0:
+				# break
+
+			ii += 1
+
+		print('Plotting x_min = {}.  {} seconds elapsed for this clade'.format(x_min, (datetime.now() - start).total_seconds()))
+		print('t_edges: {}, largest: {}'.format(t_edges.shape, largest.shape))
+		ax.plot(t_edges, largest, linewidth=lw)
+		lw = 1.0
+
+	sns.plt.xlabel('model time')
+	sns.plt.ylabel('largest of extant species')
+	sns.plt.title('largest of extant species over time, by clade')
 	sns.despine()
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
@@ -543,7 +615,8 @@ def plot_clade_n_from_rate( m ):
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
 # plot_clade_largest(all_species)
-plot_clade_largest_extant(all_species)
+# plot_clade_largest_extant(all_species)
+plot_clade_largest_extant_downsample(all_species)
 # plot_clade_largest_wdist(all_species)
 # plot_clade_n_extant(all_species)
 # plot_clade_sizes(all_species)
