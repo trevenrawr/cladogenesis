@@ -11,11 +11,11 @@ sns.set(context='poster', style='white', palette='muted', color_codes=True) #, f
 model = 1
 min = 1.8
 x_0 = 40
-n = 2500
+n = 1000
 
 all_species = pd.read_csv('all_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 	header=None,
-	names=['id', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
+	names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
 
 n_max = len(all_species.index)
 t_max = (n_max - 1) / 2
@@ -23,7 +23,7 @@ t_max = (n_max - 1) / 2
 m_edges = np.logspace(0, 10)
 t_edges = np.linspace(0, t_max, num=1000)
 
-to_time = lambda x: (x - 1) / 2
+# to_time = lambda x: (x - 1) / 2
 
 
 def plot_extant_dist( ):
@@ -32,7 +32,7 @@ def plot_extant_dist( ):
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['id', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
 
 	x = extant_species['mass']
 
@@ -60,7 +60,7 @@ def plot_niche_extant_dists( ):
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['id', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
 
 	x = extant_species['mass']
 
@@ -97,7 +97,7 @@ def plot_extant_dist_w_MOM( ):
 
 	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 		header=None,
-		names=['id', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
 
 	x = extant_species['mass']
 
@@ -201,7 +201,7 @@ def plot_clade_largest( m ):
 			if masses[ii + 1] < masses[ii]:
 				masses[ii + 1] = masses[ii]
 
-		ax.plot(to_time(clade['id']), masses, linewidth=lw)
+		ax.plot(clade['birth'], masses, linewidth=lw)
 		lw = 1.0
 
 
@@ -243,15 +243,15 @@ def plot_clade_largest_extant( m ):
 		for ii in range(len(largest_masses) - 1):
 			if largest_masses[ii + 1] < largest_masses[ii]:
 				largest_masses[ii + 1] = largest_masses[ii]
-		ax.plot(to_time(clade['id']), largest_masses, linewidth=lw)
+		ax.plot(clade['birth'], largest_masses, linewidth=lw)
 
 		# Plot all species lines
 		# for _, species in clade.iterrows():
-		# 	ax.plot([to_time(species['id']), species['death']], [species['mass'], species['mass']], linewidth=1.0)
+		# 	ax.plot([species['birth'], species['death']], [species['mass'], species['mass']], linewidth=1.0)
 
 		# Plot the largest extant version
 		masses = clade['mass'].tolist()
-		births = list(map(to_time, clade['id']))
+		births = clade['birth'].tolist()
 		deaths = clade['death'].tolist()
 		events = [births[0]]
 		largest = [masses[0]]
@@ -280,12 +280,12 @@ def plot_clade_largest_extant( m ):
 				largest_extant_index = 0
 				last_index = 0
 				for jj in range(last_largest_extant_fallback, len(masses) - 1):
-					if to_time(clade['id'].iloc[jj]) > last_largest_death:
+					if clade['birth'].iloc[jj] > last_largest_death:
 						# We've passed all the species that could satisfy the requirements
 						break
 
-					# print('{} <? {} <? {}'.format(to_time(clade['id'].iloc[jj]), last_largest_death, clade['death'].iloc[jj]))
-					if to_time(clade['id'].iloc[jj]) < last_largest_death and clade['death'].iloc[jj] > last_largest_death:
+					# print('{} <? {} <? {}'.format(clade['birth'].iloc[jj], last_largest_death, clade['death'].iloc[jj]))
+					if clade['birth'].iloc[jj] <= last_largest_death and clade['death'].iloc[jj] >= last_largest_death:
 						if clade['mass'].iloc[jj] > largest_extant:
 							# print('YES!')
 							# print('Species {} is larger than {}g, at a mass of {}.'.format(index, largest_extant, species['mass']))
@@ -357,7 +357,6 @@ def plot_clade_largest_extant_downsample( m ):
 
 		largest = np.zeros((len(t_edges), 1))
 		last_largest_extant_fallback = 0
-
 		seen = False
 		ii = 0
 		for t in t_edges:
@@ -366,16 +365,18 @@ def plot_clade_largest_extant_downsample( m ):
 			sys.stdout.write('[{:50}] {:06.2f}%'.format('='*int(percent*50), 100*percent))
 			sys.stdout.flush()
 
+			first_catch = True
 			largest_extant = 0
 			for jj in range(last_largest_extant_fallback, n_clade - 1):
-				if to_time(clade['id'].iloc[jj]) <= t and clade['death'].iloc[jj] >= t:
-					# if not seen:
-						# last_largest_extant_fallback = jj
+				if clade['birth'].iloc[jj] <= t and clade['death'].iloc[jj] >= t:
+					if first_catch:
+						last_largest_extant_fallback = jj
+						first_catch = False
 
 					if clade['mass'].iloc[jj] > largest_extant:
 						largest_extant = clade['mass'].iloc[jj]
 				# If this species' birthday is past time t, then all following b-days will be too
-				elif clade['id'].iloc[jj] > t:
+				elif clade['birth'].iloc[jj] > t:
 					break
 
 			largest[ii] = largest_extant
@@ -390,7 +391,6 @@ def plot_clade_largest_extant_downsample( m ):
 			ii += 1
 
 		print('Plotting x_min = {}.  {} seconds elapsed for this clade'.format(x_min, (datetime.now() - start).total_seconds()))
-		print('t_edges: {}, largest: {}'.format(t_edges.shape, largest.shape))
 		ax.plot(t_edges, largest, linewidth=lw)
 		lw = 1.0
 
@@ -418,7 +418,7 @@ def plot_clade_largest_wdist( m ):
 			if masses[ii + 1] < masses[ii]:
 				masses[ii + 1] = masses[ii]
 
-		g.ax_joint.plot(to_time(clade['id']), masses, linewidth=lw)
+		g.ax_joint.plot(clade['birth'], masses, linewidth=lw)
 		lw = 1.0
 
 	g.ax_marg_x.set_axis_off()
@@ -450,7 +450,7 @@ def plot_clade_n_extant( m ):
 		n_clade = len(clade.index)
 		print('Working on x_min = {}; Clade has {} species.'.format(x_min, n_clade))
 
-		bds = list(zip(list(map(to_time, clade['id'].tolist())), clade['death'].tolist()))
+		bds = list(zip(clade['birth'].tolist(), clade['death'].tolist()))
 
 		seen = False
 		for (count, t) in zip(n_extant, t_edges):
@@ -526,7 +526,7 @@ def plot_clade_spawnrate( m ):
 	for x_min in x_mins:
 		clade = m[m['m_min'] == x_min]
 
-		births = list(map(to_time, clade['id'].tolist()))
+		births = clade['birth'].tolist()
 		bd_dist  = np.histogram(births, bins=t_edges)[0]
 
 		ax.plot(t_edges[:-1], bd_dist, linewidth=lw)
@@ -580,10 +580,10 @@ def plot_clade_n_from_rate( m ):
 	for x_min in x_mins:
 		clade = m[m['m_min'] == x_min]
 
-		deaths = list(clade['death'].tolist())
+		deaths = clade['death'].tolist()
 		d_dist  = np.histogram(deaths, bins=t_edges)[0]
 
-		births = list(map(to_time, clade['id'].tolist()))
+		births = clade['birth'].tolist()
 		b_dist  = np.histogram(births, bins=t_edges)[0]
 
 		bd_dist = b_dist - d_dist
@@ -604,9 +604,6 @@ def plot_clade_n_from_rate( m ):
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
 
-# def plot_n_extant( m ):
-# 	extants = np.zeros((to_time(len(m.index)), 1))
-
 
 
 # plot_dist(all_species['mass'])
@@ -614,9 +611,9 @@ def plot_clade_n_from_rate( m ):
 # plot_niche_extant_dists()
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
-# plot_clade_largest(all_species)
+plot_clade_largest(all_species)
 # plot_clade_largest_extant(all_species)
-plot_clade_largest_extant_downsample(all_species)
+# plot_clade_largest_extant_downsample(all_species)
 # plot_clade_largest_wdist(all_species)
 # plot_clade_n_extant(all_species)
 # plot_clade_sizes(all_species)
