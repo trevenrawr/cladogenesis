@@ -11,7 +11,7 @@ sns.set(context='poster', style='white', palette='muted', color_codes=True) #, f
 model = 1
 min = 1.8
 x_0 = 40
-n = 1000
+n = 2000
 
 all_species = pd.read_csv('all_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
 	header=None,
@@ -194,7 +194,7 @@ def plot_clade_largest( m ):
 	ax = fig.add_subplot(111)
 
 	lw = 2.0
-	for x_min in x_mins[0:1]:
+	for x_min in x_mins:
 		clade = m[m['m_min'] == x_min]
 		masses = clade['mass'].tolist()
 		for ii in range(len(masses) - 1):
@@ -217,11 +217,11 @@ def plot_clade_largest( m ):
 
 def plot_clade_largest_extant( m ):
 	big_start = datetime.now()
-	print('Starting to plot largest (extant) mass in clade over time.')
+	print('Starting to plot largest extant mass in clade over time.')
 
 	# Erase the last file
-	f = open('fallbacks.txt', 'w')
-	f.close()
+	# f = open('fallbacks.txt', 'w')
+	# f.close()
 
 	x_mins = m['m_min'].unique()
 
@@ -285,7 +285,7 @@ def plot_clade_largest_extant( m ):
 						break
 
 					# print('{} <? {} <? {}'.format(clade['birth'].iloc[jj], last_largest_death, clade['death'].iloc[jj]))
-					if clade['birth'].iloc[jj] <= last_largest_death and clade['death'].iloc[jj] >= last_largest_death:
+					if clade['birth'].iloc[jj] <= last_largest_death and clade['death'].iloc[jj] > last_largest_death:
 						if clade['mass'].iloc[jj] > largest_extant:
 							# print('YES!')
 							# print('Species {} is larger than {}g, at a mass of {}.'.format(index, largest_extant, species['mass']))
@@ -296,9 +296,9 @@ def plot_clade_largest_extant( m ):
 								#  largest extant species after one dies off.  We can start our search here instead of
 								#  at the beginning next time and save LOTS of time.  (Hopefully!)
 								last_largest_extant_fallback = jj
-								f = open('fallbacks.txt', 'a')
-								f.write(str(clade['id'].iloc[jj]) + '\n')
-								f.close()
+								# f = open('fallbacks.txt', 'a')
+								# f.write(str(clade['id'].iloc[jj]) + '\n')
+								# f.close()
 								# print('First hit: {}'.format(clade['id'].iloc[jj]))
 								first_catch = False
 
@@ -306,7 +306,7 @@ def plot_clade_largest_extant( m ):
 					events.append(last_largest_death)
 					largest.append(largest_extant)
 					last_largest_death = clade['death'].iloc[largest_extant_index]
-					# print('Found next largest.  Index: {}, dies at {}'.format(largest_extant_index, last_largest_death))
+					# print('\nLast largest died at {}.  Next largest extant index: {}, dies at {}'.format(events[-1], largest_extant_index, last_largest_death))
 				else:
 					# events.append(last_largest_death)
 					# largest.append(0)
@@ -340,7 +340,7 @@ def plot_clade_largest_extant( m ):
 
 def plot_clade_largest_extant_downsample( m ):
 	big_start = datetime.now()
-	print('Starting to plot largest extant over time.')
+	print('Starting to plot largest extant over time, through downsampling.')
 
 	x_mins = m['m_min'].unique()
 
@@ -362,7 +362,7 @@ def plot_clade_largest_extant_downsample( m ):
 		for t in t_edges:
 			sys.stdout.write('\r')
 			percent = ii / len(t_edges)
-			sys.stdout.write('[{:50}] {:06.2f}%'.format('='*int(percent*50), 100*percent))
+			sys.stdout.write('[{:50}] {:05.2f}%'.format('='*int(percent*50), 100*percent))
 			sys.stdout.flush()
 
 			first_catch = True
@@ -375,6 +375,7 @@ def plot_clade_largest_extant_downsample( m ):
 
 					if clade['mass'].iloc[jj] > largest_extant:
 						largest_extant = clade['mass'].iloc[jj]
+
 				# If this species' birthday is past time t, then all following b-days will be too
 				elif clade['birth'].iloc[jj] > t:
 					break
@@ -384,9 +385,10 @@ def plot_clade_largest_extant_downsample( m ):
 			# If we've seen a member of the clade, its reign has begun
 			if largest_extant > 0:
 				seen = True
+
 			# If we have seen the clade and now it had died off, move on to next clade
-			# if seen and largest_extant == 0:
-				# break
+			if seen and largest_extant == 0:
+				break
 
 			ii += 1
 
@@ -611,8 +613,8 @@ def plot_clade_n_from_rate( m ):
 # plot_niche_extant_dists()
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
-plot_clade_largest(all_species)
-# plot_clade_largest_extant(all_species)
+# plot_clade_largest(all_species)
+plot_clade_largest_extant(all_species)
 # plot_clade_largest_extant_downsample(all_species)
 # plot_clade_largest_wdist(all_species)
 # plot_clade_n_extant(all_species)

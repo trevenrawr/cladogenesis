@@ -43,7 +43,7 @@ fn main() {
 	let n_0 = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
 	let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
-	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.0001);
+	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.000001);
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
 
 	//// model_styles:
@@ -64,7 +64,7 @@ fn main() {
 
 	let mut n = vec![n_0];
 	// How likely it is that a ratchet lets the species (and therefore descendants) into a new (latent) nichespace
-	let r_niche_prob = 0.01;					// Default: 0.01?
+	let r_niche_prob = 1.00;					// Default: 0.01?
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
