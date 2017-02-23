@@ -23,7 +23,21 @@ pub struct Species {
 }
 
 
+fn ks() {
+	let mut rdr = csv::Reader::from_file("MOM_data_full.txt").unwrap();
+
+	for row in rdr.decode() {
+		let (land, spec_id, gen_id, fam_id, ord_id, mass, code):
+			(usize, usize, usize, usize, usize, f64, String) = row.unwrap();
+		println!("Species {} has mass {}.", spec_id, mass);
+		break;
+	}
+}
+
+
 fn main() {
+	ks();
+
 	let args = clap::App::new("Cladogenesis")
 	.version("0.9.27")
 	.author("Trevor DiMartino")

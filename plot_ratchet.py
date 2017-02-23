@@ -610,11 +610,11 @@ def plot_clade_n_from_rate( m ):
 
 # plot_dist(all_species['mass'])
 # plot_extant_dist()
-# plot_niche_extant_dists()
+plot_niche_extant_dists()
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
 # plot_clade_largest(all_species)
-plot_clade_largest_extant(all_species)
+# plot_clade_largest_extant(all_species)
 # plot_clade_largest_extant_downsample(all_species)
 # plot_clade_largest_wdist(all_species)
 # plot_clade_n_extant(all_species)
