@@ -2,6 +2,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
+from random import uniform
 from datetime import datetime
 import itertools
 import sys
@@ -23,7 +24,65 @@ t_max = (n_max - 1) / 2
 m_edges = np.logspace(0, 10)
 t_edges = np.linspace(0, t_max, num=1000)
 
-# to_time = lambda x: (x - 1) / 2
+to_time = lambda x: (x - 1) / 2
+
+def plot_random_walks( walks, steps ):
+	print('Plotting {} random walks of {} steps each'.format(walks, steps))
+
+	def step_gen( tot ):
+		x = 0
+		for _ in range(tot):
+			yield x
+			x += uniform(-1, 1)
+
+	fig = sns.plt.figure()
+	ax = fig.add_subplot(111)
+
+	ax.plot([0, steps], [0, 0], linewidth=0.5, color="k", linestyle="--")
+
+	for _ in range(walks):
+		ax.plot(range(steps), list(step_gen(steps)), linewidth=1.0)
+
+	sns.plt.xlabel('iteration')
+	sns.plt.ylabel('position')
+	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.despine()
+
+
+def plot_random_walks_from_data( m, walks ):
+	print('Plotting {} random walks from data'.format(walks))
+
+	# Grab extant species for choosing which one to trace lineage of
+	extant_species = pd.read_csv('extant_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
+		header=None,
+		names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
+
+	fig = sns.plt.figure()
+	pal = itertools.cycle(sns.color_palette())
+
+	selection = extant_species.sample(n=walks)
+	print('{}'.format(selection))
+
+	for ii in range(walks):
+		ax = fig.add_subplot(walks, 1, (ii + 1))
+		species = selection.iloc[ii]
+		x = []
+
+		while species['ancestor'] > 0:
+			# Build the list backwards, since we're starting at the end
+			x.insert(0, species['mass'])
+			species = m[m['id'] == species['ancestor']].iloc[0]
+
+		x.insert(0, x_0)
+		ax.plot(range(len(x)), x, linewidth=1.0, color=next(pal))
+		sns.plt.yscale('log')
+
+
+	sns.plt.xlabel('evolutionary step')
+	sns.plt.ylabel('mass, g')
+	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.despine()
+
 
 
 def plot_extant_dist( ):
@@ -607,10 +666,11 @@ def plot_clade_n_from_rate( m ):
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
 
 
-
+# plot_random_walks(3, 3000)
+plot_random_walks_from_data(all_species, 3)
 # plot_dist(all_species['mass'])
 # plot_extant_dist()
-plot_niche_extant_dists()
+# plot_niche_extant_dists()
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
 # plot_clade_largest(all_species)
@@ -622,4 +682,6 @@ plot_niche_extant_dists()
 # plot_clade_spawnrate(all_species)
 # plot_clade_extrate(all_species)
 # plot_clade_n_from_rate(all_species)
+
 sns.plt.show()
+# sns.plt.savefig("something.pdf")

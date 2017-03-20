@@ -23,6 +23,7 @@ pub struct Species {
 }
 
 
+// Compare a generated distribution to the one from the MOM data using a stabilized KS test
 fn ks() {
 	let mut rdr = csv::Reader::from_file("MOM_data_full.txt").unwrap();
 
@@ -35,9 +36,23 @@ fn ks() {
 }
 
 
-fn main() {
-	ks();
+// Generate a simple (multiplicative) random walk.
+fn random_walk(x: Vec<f64>, to_step: usize) -> Vec<f64> {
+	
+	let ret = if to_step > 0 {
+		let StandardNormal(r) = random();
+		let n = x.last().unwrap() + (r as f64 - 0.5) * 2.0;
 
+		random_walk([&x[..], &[n]].concat(), to_step - 1)
+	} else {
+		x
+	};
+
+	ret
+}
+
+
+fn main() {
 	let args = clap::App::new("Cladogenesis")
 	.version("0.9.27")
 	.author("Trevor DiMartino")
@@ -49,7 +64,8 @@ fn main() {
 		-a --writeall=[write_all]			'Write out birth order, mass, and death time of all species (default true)'
 		-r --ratchet=[ratchet]				'Turn on ratcheting capability (default true)'
 		-p --r_prob=[r_prob]					'Probability of a ratchet trait evolving (default 0.0001)'
-		-s --model_style=[model_style]	'Choose model style (default 1)' ")
+		-s --model_style=[model_style]	'Choose model style (default 1)'
+		-b --batches=[batches]					'Set number of runs to make at these settings (default 1)")
 	.get_matches();
 
 	let x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
@@ -57,15 +73,25 @@ fn main() {
 	let n_0 = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
 	let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
+	// Ratchets could be more likely than that.  Maybe 2/260000?
 	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.000001);
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
+	let batches = value_t!(args.value_of("batches"), usize).unwrap_or(1);
+
+	if batches > 1 && write_all {
+		println!("Warning: writing all in a batch setting will use a lot of disk space.");
+		println!("Warning: writing all in a batch setting will use a lot of disk space.");
+		println!("Yes, I printed that twice so you'd be sure to notice.");
+	}
 
 	//// model_styles:
-	// 1. Use "retain" to clean up extant
-	// 2. Discard extant species upon random selection if they're already dead
+	// 1. Use "retain" to clean up extant (geodist)
+	// 2. Discard extant species upon random selection if they're already dead (slower than #1)
 	// 3. Drop a meteor on the extant set halfway through simulation
 		// Multiplier for "meteor" (climate change?) bias against seed clade
-		let m_bias = 0.9;
+		// p_0 = 0.5 * (1.0 + m_bias)
+		// p_else = 0.5 * (1.0 - m_bias)
+		let m_bias = 0.9;  // 95% extinction for seed clade, 5% extinction else
 	// 4. Increase ratchet probability during the initial radiation phase of the model
 		// Probability of ratchet during seed radiation phase
 		let r_prob_radiation = 0.25;
@@ -111,34 +137,6 @@ fn main() {
 		(x.log10() / (1.0 - p).log10()).ceil() as usize
 	};
 
-	// Set up our data structures
-	let mut extant: Vec<Vec<Species>> = Vec::new();
-
-	extant.push(Vec::with_capacity((n_0 as f64 * 1.5).ceil() as usize));
-	let doom = doom_timer(x_0, n_0);
-	extant[0].push(Species{
-		id: 1,
-		birth: 0,
-		mass: x_0,
-		min_mass: x_min,
-		death: doom,
-		parent: 0,
-		niche: 0,
-	});
-
-	let mut all_species: Vec<Species> = Vec::with_capacity(0);
-	if write_all {
-		all_species = Vec::with_capacity(2 * t_max + 1);
-		all_species.push(Species{
-			id: 1, 
-			birth: 0,
-			mass: x_0, 
-			min_mass: x_min, 
-			death: doom, 
-			parent: 0,
-			niche: 0,
-		});
-	}
 
 	////////////////////////////////////////////////////////////////////////////
 	/////   important functions   //////////////////////////////////////////////
@@ -243,199 +241,239 @@ fn main() {
 			_ => cu1(extant, step),
 		}
 	};
-	////////////////////////////////////////////////////////////////////////////
+	/////////////////////// end "important functions" //////////////////////
 
 
-	let start = time::precise_time_ns();
 
-	let mut n_s = 1;
-	let mut step = 1;
-	let mut recent_ratchet = (x_min, step);  // Used for model_style 5
+	// Everything up to here is just setting up the model, now we run it
 
-	let mut pb = ProgressBar::new(t_max as u64);
+	for batch in 0..batches {
+		// Set up our data structures
+		let mut extant: Vec<Vec<Species>> = Vec::new();
 
-	while step <= t_max {
-		pb.inc();
+		extant.push(Vec::with_capacity((n_0 as f64 * 1.5).ceil() as usize));
+		let doom = doom_timer(x_0, n_0);
+		extant[0].push(Species{
+			id: 1,
+			birth: 0,
+			mass: x_0,
+			min_mass: x_min,
+			death: doom,
+			parent: 0,
+			niche: 0,
+		});
 
-		for nichespace in 0..extant.len() {
-			let (ancestor_loc, ancestor) = choose_anc(step, &mut extant[nichespace], recent_ratchet);
+		let mut all_species: Vec<Species> = Vec::with_capacity(0);
+		if write_all {
+			all_species = Vec::with_capacity(2 * t_max + 1);
+			all_species.push(Species{
+				id: 1, 
+				birth: 0,
+				mass: x_0, 
+				min_mass: x_min, 
+				death: doom, 
+				parent: 0,
+				niche: 0,
+			});
+		}
 
-			// Spawn two descendant species
-			for _ in 0..2 {
-				n_s += 1;
 
-				let mass_d = new_mass(ancestor.mass, ancestor.min_mass);
+		let start = time::precise_time_ns();
 
-				// See if we've evolved a floor-raising characteristic
-				let min_d: f64;
-				let niche_d: usize;
-				if ratchet {
-					// Update ratchet probabilty during initial radiation, if proper model is selected
-					let r_eff = if model_style == 4 && n_s < n[nichespace] {
-						r_prob_radiation
-					} else {
-						r_prob
-					};
+		let mut n_s = 1;
+		let mut step = 1;
+		let mut recent_ratchet = (x_min, step);  // Used for model_style 5
 
-					if random::<f64>() < r_prob {
-						// If we get a ratchet, new mass floor is ancestor mass
-						min_d = mass_d;
-						if model_style == 5 {
-							recent_ratchet = (min_d, step + radiation_duration)
-						}
+		let mut pb = ProgressBar::new(t_max as u64);
 
-						// If we are allowing new nichespaces...
-						if random::<f64>() < r_niche_prob {
-							niche_d = extant.len();
+		while step <= t_max {
+			pb.inc();
 
-							// Determine the maximum number of species the new niche can sustain
-							let n_new: usize = (10f64.powf(3.75) * min_d.powf(-0.5)).ceil() as usize;
-							n.push(n_new);
+			for nichespace in 0..extant.len() {
+				let (ancestor_loc, ancestor) = choose_anc(step, &mut extant[nichespace], recent_ratchet);
 
-							extant.push(Vec::with_capacity((n_new as f64 * 1.5).ceil() as usize));
+				// Spawn two descendant species
+				for _ in 0..2 {
+					n_s += 1;
 
-							println!("\nCreating new nichespace, {}, with capacity {} and m_min {}", extant.len(), n_new, min_d);
+					let mass_d = new_mass(ancestor.mass, ancestor.min_mass);
+
+					// See if we've evolved a floor-raising characteristic
+					let min_d: f64;
+					let niche_d: usize;
+					if ratchet {
+						// Update ratchet probabilty during initial radiation, if proper model is selected
+						let r_eff = if model_style == 4 && n_s < n[nichespace] {
+							r_prob_radiation
 						} else {
+							r_prob
+						};
+
+						if random::<f64>() < r_prob {
+							// If we get a ratchet, new mass floor is ancestor mass
+							min_d = mass_d;
+							if model_style == 5 {
+								recent_ratchet = (min_d, step + radiation_duration)
+							}
+
+							// If we are allowing new nichespaces...
+							if random::<f64>() < r_niche_prob {
+								niche_d = extant.len();
+
+								// Determine the maximum number of species the new niche can sustain
+								// Decreases linearly with respsect to log(x_min)
+								let n_new: usize = (4234.7f64 + min_d.log10() * -1.0184f64).ceil() as usize;
+								n.push(n_new);
+
+								extant.push(Vec::with_capacity((n_new as f64 * 1.5).ceil() as usize));
+
+								println!("\nCreating new nichespace, {}, with capacity {} and m_min {}", extant.len(), n_new, min_d);
+							} else {
+								niche_d = ancestor.niche;
+							}
+						} else {
+							// Else, the min remains the min of the ancestor
+							min_d = ancestor.min_mass;
 							niche_d = ancestor.niche;
 						}
 					} else {
-						// Else, the min remains the min of the ancestor
 						min_d = ancestor.min_mass;
 						niche_d = ancestor.niche;
 					}
-				} else {
-					min_d = ancestor.min_mass;
-					niche_d = ancestor.niche;
-				}
 
-				let doom = doom_timer(mass_d, n[niche_d]) + step;
+					let doom = doom_timer(mass_d, n[niche_d]) + step;
 
-				extant[niche_d].push(Species{
-					id: n_s, 
-					birth: step,
-					mass: mass_d, 
-					min_mass: min_d, 
-					death: doom,
-					parent: ancestor.id,
-					niche: niche_d,
-				});
-
-				if write_all {
-					all_species.push(Species{
-						id: n_s,
+					extant[niche_d].push(Species{
+						id: n_s, 
 						birth: step,
-						mass: mass_d,
-						min_mass: min_d,
+						mass: mass_d, 
+						min_mass: min_d, 
 						death: doom,
 						parent: ancestor.id,
 						niche: niche_d,
 					});
+
+					if write_all {
+						all_species.push(Species{
+							id: n_s,
+							birth: step,
+							mass: mass_d,
+							min_mass: min_d,
+							death: doom,
+							parent: ancestor.id,
+							niche: niche_d,
+						});
+					}
 				}
-			}
-			
-			// Set the ancestor species to die in cleanup.
-			extant[nichespace][ancestor_loc] = Species{
-				id: ancestor.id,
-				birth: ancestor.birth,
-				mass: ancestor.mass,
-				min_mass: ancestor.min_mass,
-				death: step,
-				parent: ancestor.parent,
-				niche: ancestor.niche,
-			};
+				
+				// Set the ancestor species to die in cleanup.
+				extant[nichespace][ancestor_loc] = Species{
+					id: ancestor.id,
+					birth: ancestor.birth,
+					mass: ancestor.mass,
+					min_mass: ancestor.min_mass,
+					death: step,
+					parent: ancestor.parent,
+					niche: ancestor.niche,
+				};
 
-			// If we are told to, check if we're halfway through the sim, and drop a meteor
-			if model_style == 3 {
-				if step == t_max / 2 {
-					// Drop a meteor!
-					let mut killed = 0;
-					for ii in 0..extant[nichespace].len() {
-						let species = extant[nichespace][ii].clone();
+				// If we are told to, check if we're halfway through the sim, and drop a meteor
+				if model_style == 3 {
+					if step == t_max / 2 {
+						// Drop a meteor!
+						let mut killed = 0;
+						for ii in 0..extant[nichespace].len() {
+							let species = extant[nichespace][ii].clone();
 
-						let p_dead = if species.min_mass == x_min {
-							// It's part of the seed clade
-							0.5 * (1.0 + m_bias)
-						} else {
-							0.5 * (1.0 - m_bias)
-						};
-
-						if random::<f64>() < p_dead {
-							extant[nichespace][ii] = Species{
-								id: species.id,
-								birth: species.birth,
-								mass: species.mass,
-								min_mass: species.min_mass,
-								death: step,
-								parent: species.parent,
-								niche: species.niche,
+							let p_dead = if species.min_mass == x_min {
+								// It's part of the seed clade
+								0.5 * (1.0 + m_bias)
+							} else {
+								0.5 * (1.0 - m_bias)
 							};
 
-							if write_all {
-								// Log, in all_species, that they died now due to meteor
-								let spec = all_species[species.id - 1].clone();
+							if random::<f64>() < p_dead {
+								extant[nichespace][ii] = Species{
+									id: species.id,
+									birth: species.birth,
+									mass: species.mass,
+									min_mass: species.min_mass,
+									death: step,
+									parent: species.parent,
+									niche: species.niche,
+								};
 
-								// Sanity check!
-								assert_eq!(species.mass, spec.mass);
+								if write_all {
+									// Log, in all_species, that they died now due to meteor
+									let spec = all_species[species.id - 1].clone();
 
-								all_species[species.id - 1] = Species{
-										id: spec.id,
-										birth: spec.birth,
-										mass: spec.mass,
-										min_mass: spec.min_mass,
-										death: step,
-										parent: spec.parent,
-										niche: spec.niche,
-									};
+									// Sanity check!
+									assert_eq!(species.mass, spec.mass);
+
+									all_species[species.id - 1] = Species{
+											id: spec.id,
+											birth: spec.birth,
+											mass: spec.mass,
+											min_mass: spec.min_mass,
+											death: step,
+											parent: spec.parent,
+											niche: spec.niche,
+										};
+								}
+
+								killed += 1;
 							}
-
-							killed += 1;
 						}
-					}
 
-					println!("A meteor fell and killed off {} out of {} species.", killed, extant[nichespace].len());
+						println!("A meteor fell and killed off {} out of {} species.", killed, extant[nichespace].len());
+					}
 				}
+
+				// Clean up extant, depending on the model 
+				cleanup(ancestor_loc, &mut extant[nichespace], step);
 			}
 
-			// Clean up extant, depending on the model 
-			cleanup(ancestor_loc, &mut extant[nichespace], step);
+			step += 1;
 		}
 
-		step += 1;
-	}
-
-	if model_style == 2 {
-		// Go through the list once and clean it up by removing everything that's dead
-		for nichespace in 0..extant.len() {
-			extant[nichespace].retain(|species| species.death >= step);
-		}
-	}
-
-	// End timing
-	let end = time::precise_time_ns();
-	pb.finish_print("Complete");
-	println!("\nRan Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
-
-	// Print out our final set of extant species
-	let path = format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n_0);
-	let mut writer = Writer::from_file(path).unwrap();
-	for ns in extant.into_iter() {
-		for s in ns.into_iter() {
-			writer.encode(s).ok().expect("CSV writer error");
-		}
-	}
-
-	if write_all {
-		let start = time::precise_time_ns();
-
-		// All species from the HashMap
-		let path = format!("all_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n_0);
-		let mut writer = Writer::from_file(path).unwrap();
-		for s in all_species.into_iter() {
-			writer.encode(s).ok().expect("CSV writer error");
+		if model_style == 2 {
+			// Go through the list once and clean it up by removing everything that's dead
+			for nichespace in 0..extant.len() {
+				extant[nichespace].retain(|species| species.death >= step);
+			}
 		}
 
+		// End timing
 		let end = time::precise_time_ns();
-		println!("Saved all in {} seconds.", (end - start) as f64 / 1000000000.0);
+		pb.finish_print("Complete");
+		println!("\nRan Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
+
+		// Print out our final set of extant species
+		let path = if batches == 1 {
+			format!("extant_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n_0)
+		} else {
+			format!("extant_m{}_{}_{}_{}_b{}.csv", model_style, x_min, x_0, n_0, batch)
+		};
+		let mut writer = Writer::from_file(path).unwrap();
+		for ns in extant.into_iter() {
+			for s in ns.into_iter() {
+				writer.encode(s).ok().expect("CSV writer error");
+			}
+		}
+
+		if write_all {
+			let start = time::precise_time_ns();
+
+			// All species from the HashMap
+			let path = format!("all_m{}_{}_{}_{}.csv", model_style, x_min, x_0, n_0);
+			let mut writer = Writer::from_file(path).unwrap();
+			for s in all_species.into_iter() {
+				writer.encode(s).ok().expect("CSV writer error");
+			}
+
+			let end = time::precise_time_ns();
+			println!("Saved all in {} seconds.", (end - start) as f64 / 1000000000.0);
+		}
 	}
 
 }
