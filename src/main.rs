@@ -63,7 +63,7 @@ fn main() {
 		-n --nspecies=[n]						'Estimate of number of species at equilibrium (default 5000)'
 		-a --writeall=[write_all]			'Write out birth order, mass, and death time of all species (default true)'
 		-r --ratchet=[ratchet]				'Turn on ratcheting capability (default true)'
-		-p --r_prob=[r_prob]					'Probability of a ratchet trait evolving (default 0.0001)'
+		-p --r_prob=[r_prob]					'Probability of a ratchet trait evolving (default 0.000005)'
 		-s --model_style=[model_style]	'Choose model style (default 1)'
 		-b --batches=[batches]					'Set number of runs to make at these settings (default 1)")
 	.get_matches();
@@ -73,15 +73,15 @@ fn main() {
 	let n_0 = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
 	let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
-	// Ratchets could be more likely than that.  Maybe 2/260000?
-	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.000001);
+	// Ratchets could be more likely than that.  Maybe 1/260000?
+	let r_prob = value_t!(args.value_of("r_prob"), f64).unwrap_or(0.000005);
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
 	let batches = value_t!(args.value_of("batches"), usize).unwrap_or(1);
 
 	if batches > 1 && write_all {
 		println!("Warning: writing all in a batch setting will use a lot of disk space.");
 		println!("Warning: writing all in a batch setting will use a lot of disk space.");
-		println!("Yes, I printed that twice so you'd be sure to notice.");
+		println!("Yes, I prin3ted that twice so you'd be sure to notice.");
 	}
 
 	//// model_styles:
@@ -91,26 +91,29 @@ fn main() {
 		// Multiplier for "meteor" (climate change?) bias against seed clade
 		// p_0 = 0.5 * (1.0 + m_bias)
 		// p_else = 0.5 * (1.0 - m_bias)
-		let m_bias = 0.9;  // 95% extinction for seed clade, 5% extinction else
+		// let m_bias = 0.0;  // Equal probabilities for all extant species to die
+		let m_bias = 1.0; // 95% extinction for seed clade, 5% extinction else
 	// 4. Increase ratchet probability during the initial radiation phase of the model
+			// Until a number of species equal to n has been spawned
 		// Probability of ratchet during seed radiation phase
 		let r_prob_radiation = 0.25;
 	// 5. Promote radiation phase for recently ratcheted species
-		// Probability of not accepting a non-recently ratcheted species during promotion phase
+		// Probability of choosing only a recently ratcheted species during promotion phase
 		let radiation_preference = 1.00;		// Default: 1.00
 		// How long a recently ratcheted species gets preference, in model steps
 		let radiation_duration = 100;			// Default: 100
 
 
 	let mut n = vec![n_0];
+
 	// How likely it is that a ratchet lets the species (and therefore descendants) into a new (latent) nichespace
-	let r_niche_prob = 1.00;					// Default: 0.01?
+	let r_niche_prob = 0.00;					// Default: 0.01?
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
 	// Determine how many n_ss to run
 	let nu = 1.6;       // mean species lifetime (My)
-	let tau = 500.0;     // total simulation time (My)
+	let tau = 250.0;     // total simulation time (My)
 	// let t_max: usize = 25000;
 	let t_max = ((tau / nu) * (n[0] as f64)).ceil() as usize;
 
@@ -284,10 +287,10 @@ fn main() {
 		let mut step = 1;
 		let mut recent_ratchet = (x_min, step);  // Used for model_style 5
 
-		let mut pb = ProgressBar::new(t_max as u64);
+		// let mut pb = ProgressBar::new(t_max as u64);
 
 		while step <= t_max {
-			pb.inc();
+			// pb.inc();
 
 			for nichespace in 0..extant.len() {
 				let (ancestor_loc, ancestor) = choose_anc(step, &mut extant[nichespace], recent_ratchet);
@@ -309,7 +312,7 @@ fn main() {
 							r_prob
 						};
 
-						if random::<f64>() < r_prob {
+						if random::<f64>() < r_eff {
 							// If we get a ratchet, new mass floor is ancestor mass
 							min_d = mass_d;
 							if model_style == 5 {
@@ -445,8 +448,8 @@ fn main() {
 
 		// End timing
 		let end = time::precise_time_ns();
-		pb.finish_print("Complete");
-		println!("\nRan Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
+		// pb.finish_print("Complete\n");
+		println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
 
 		// Print out our final set of extant species
 		let path = if batches == 1 {

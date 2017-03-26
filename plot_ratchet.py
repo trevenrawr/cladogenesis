@@ -9,12 +9,13 @@ import sys
 
 sns.set(context='poster', style='white', palette='muted', color_codes=True) #, font_scale=1.5)
 
-model = 1
+model = 5
 min = 1.8
 x_0 = 40
-n = 2000
+n = 5000
 
 all_species = pd.read_csv('all_m{}_{}_{}_{}.csv'.format(model, min, x_0, n),
+# all_species = pd.read_csv('naiveSimFig_all.csv',
 	header=None,
 	names=['id', 'birth', 'mass', 'm_min', 'death', 'ancestor', 'niche'])
 
@@ -84,7 +85,6 @@ def plot_random_walks_from_data( m, walks ):
 	sns.despine()
 
 
-
 def plot_extant_dist( ):
 	big_start = datetime.now()
 	print('Starting to plot extant mass distribution.')
@@ -144,7 +144,6 @@ def plot_niche_extant_dists( ):
 	sns.despine()
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
-
 
 
 def plot_extant_dist_w_MOM( ):
@@ -249,7 +248,7 @@ def plot_clade_largest( m ):
 
 	x_mins = m['m_min'].unique()
 
-	fig = sns.plt.figure()
+	fig = sns.plt.figure(figsize=(9, 4.75), dpi=80)
 	ax = fig.add_subplot(111)
 
 	lw = 2.0
@@ -264,11 +263,12 @@ def plot_clade_largest( m ):
 		lw = 1.0
 
 
-	sns.plt.yscale('log')
 	sns.plt.xlabel('model time')
-	sns.plt.ylabel('largest mass in clade')
-	sns.plt.title('largest species seen to date, by clade')
+	sns.plt.xticks([])
+	sns.plt.yscale('log')
+	sns.plt.ylabel('largest mass seen, g')
 	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.plt.tight_layout()
 	sns.despine()
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
@@ -277,10 +277,6 @@ def plot_clade_largest( m ):
 def plot_clade_largest_extant( m ):
 	big_start = datetime.now()
 	print('Starting to plot largest extant mass in clade over time.')
-
-	# Erase the last file
-	# f = open('fallbacks.txt', 'w')
-	# f.close()
 
 	x_mins = m['m_min'].unique()
 
@@ -634,7 +630,7 @@ def plot_clade_n_from_rate( m ):
 
 	x_mins = m['m_min'].unique()
 
-	fig = sns.plt.figure()
+	fig = sns.plt.figure(figsize=(9, 4.75), dpi=80)
 	ax = fig.add_subplot(111)
 
 	lw = 2.0
@@ -658,22 +654,26 @@ def plot_clade_n_from_rate( m ):
 		ax.plot(t_edges[:-1], n_extant, linewidth=lw)
 		lw = 1.0
 
+		print('Clade with m_min = {} had at most {} species alive at once.'.format(x_min, max(n_extant)))
+
 	sns.plt.xlabel('model time')
+	sns.plt.xticks([])
 	sns.plt.ylabel('number of extant species, by group'.format(t_edges[1]))
-	sns.plt.gcf().subplots_adjust(bottom=0.15)
+	# sns.plt.gcf().subplots_adjust(bottom=0.15)
+	sns.plt.tight_layout()
 	sns.despine()
 
 	print('All species took {} seconds.'.format((datetime.now() - big_start).total_seconds()))
 
 
 # plot_random_walks(3, 3000)
-plot_random_walks_from_data(all_species, 3)
+# plot_random_walks_from_data(all_species, 3)
 # plot_dist(all_species['mass'])
 # plot_extant_dist()
 # plot_niche_extant_dists()
 # plot_extant_dist_w_MOM()
 # plot_clade_dists(all_species)
-# plot_clade_largest(all_species)
+plot_clade_largest(all_species)
 # plot_clade_largest_extant(all_species)
 # plot_clade_largest_extant_downsample(all_species)
 # plot_clade_largest_wdist(all_species)
@@ -681,7 +681,7 @@ plot_random_walks_from_data(all_species, 3)
 # plot_clade_sizes(all_species)
 # plot_clade_spawnrate(all_species)
 # plot_clade_extrate(all_species)
-# plot_clade_n_from_rate(all_species)
+plot_clade_n_from_rate(all_species)
 
 sns.plt.show()
 # sns.plt.savefig("something.pdf")
