@@ -35,7 +35,6 @@ fn ks() {
 	}
 }
 
-
 // Generate a simple (multiplicative) random walk.
 fn random_walk(x: Vec<f64>, to_step: usize) -> Vec<f64> {
 	
@@ -51,6 +50,54 @@ fn random_walk(x: Vec<f64>, to_step: usize) -> Vec<f64> {
 	ret
 }
 
+#[test]
+fn replace_test() {
+	let mut extant: Vec<Species> = Vec::new();
+
+	let x_0 = 40.0f64;
+	let x_min = 1.8f64;
+
+	let doom_timer = |mass: f64, n: usize| {
+		// Extinction parameters
+		let beta = 1.0/(n as f64);    // baseline extinction rate
+		let rho = 0.025;              // rate of extinction increase
+
+		let p = (10.0 as f64).powf(rho * mass.log10() + beta.log10());
+
+		let x: f64 = random();
+		(x.log10() / (1.0 - p).log10()).ceil() as usize
+	};
+
+	let ii = 0;
+
+	extant.push(Species{
+		id: 1,
+		birth: 0,
+		mass: x_0,
+		min_mass: x_min,
+		death: 100,
+		parent: 0,
+		niche: 0,
+	});
+
+
+	assert_eq!(extant[ii].death, 100);
+
+	let species = extant[ii].clone();
+
+	extant[ii] = Species{
+		id: species.id,
+		birth: species.birth,
+		mass: species.mass,
+		min_mass: species.min_mass,
+		death: 0,
+		parent: species.parent,
+		niche: species.niche,
+	};
+
+	assert_eq!(extant[ii].death, 0);
+}
+
 
 fn main() {
 	let args = clap::App::new("Cladogenesis")
@@ -60,16 +107,18 @@ fn main() {
 	.args_from_usage("\
 		-m --min=[x_min]						'Minimum species mass, g (default 1.8)'
 		-i --initial=[x_0]					'Initial species mass, g (default 40.0)'
+		-t --tau=[tau]							'Maximum amount of sim time to run (default 250 My)'
 		-n --nspecies=[n]						'Estimate of number of species at equilibrium (default 5000)'
 		-a --writeall=[write_all]			'Write out birth order, mass, and death time of all species (default true)'
 		-r --ratchet=[ratchet]				'Turn on ratcheting capability (default true)'
 		-p --r_prob=[r_prob]					'Probability of a ratchet trait evolving (default 0.000005)'
 		-s --model_style=[model_style]	'Choose model style (default 1)'
-		-b --batches=[batches]					'Set number of runs to make at these settings (default 1)")
+		-b --batches=[batches]				'Set number of runs to make at these settings (default 1)")
 	.get_matches();
 
 	let x_min = value_t!(args.value_of("min"), f64).unwrap_or(1.8);
 	let x_0 = value_t!(args.value_of("initial"), f64).unwrap_or(40.0);
+	let tau = value_t!(args.value_of("tau"), f64).unwrap_or(250.0);     // total simulation time (My)
 	let n_0 = value_t!(args.value_of("nspecies"), usize).unwrap_or(5000);
 	let write_all = value_t!(args.value_of("writeall"), bool).unwrap_or(true);
 	let ratchet = value_t!(args.value_of("ratchet"), bool).unwrap_or(true);
@@ -78,11 +127,13 @@ fn main() {
 	let model_style = value_t!(args.value_of("model_style"), usize).unwrap_or(1);
 	let batches = value_t!(args.value_of("batches"), usize).unwrap_or(1);
 
-	if batches > 1 && write_all {
-		println!("Warning: writing all in a batch setting will use a lot of disk space.");
-		println!("Warning: writing all in a batch setting will use a lot of disk space.");
-		println!("Yes, I prin3ted that twice so you'd be sure to notice.");
-	}
+	let write_all = if batches > 1 && write_all {
+		println!("WARNING: Writing all in a batch setting will use a lot of disk space.");
+		println!("So I'll just turn off writing all species out for you.");
+		false
+	} else {
+		write_all
+	};
 
 	//// model_styles:
 	// 1. Use "retain" to clean up extant (geodist)
@@ -91,30 +142,30 @@ fn main() {
 		// Multiplier for "meteor" (climate change?) bias against seed clade
 		// p_0 = 0.5 * (1.0 + m_bias)
 		// p_else = 0.5 * (1.0 - m_bias)
-		// let m_bias = 0.0;  // Equal probabilities for all extant species to die
-		let m_bias = 1.0; // 95% extinction for seed clade, 5% extinction else
-	// 4. Increase ratchet probability during the initial radiation phase of the model
+		let m_bias = 0.0;  // Equal probabilities for all extant species to die
+		// let m_bias = 0.999; // 99.95% extinction for seed clade, 0.05% extinction else
+	// 4. Radiation--Increase ratchet probability during the initial radiation phase of the model
 			// Until a number of species equal to n has been spawned
 		// Probability of ratchet during seed radiation phase
-		let r_prob_radiation = 0.25;
-	// 5. Promote radiation phase for recently ratcheted species
+		let r_prob_radiation = 0.5;
+	// 5. Promotion--Promote radiation phase for recently ratcheted species
 		// Probability of choosing only a recently ratcheted species during promotion phase
 		let radiation_preference = 1.00;		// Default: 1.00
 		// How long a recently ratcheted species gets preference, in model steps
-		let radiation_duration = 100;			// Default: 100
+		let radiation_duration = 25;			// Default: 100
 
 
 	let mut n = vec![n_0];
 
 	// How likely it is that a ratchet lets the species (and therefore descendants) into a new (latent) nichespace
-	let r_niche_prob = 0.00;					// Default: 0.01?
+	let r_niche_prob = 1.0;			// prob that a ratchet gets a niche.  Default: 1.0
+	let min_niche_cap = 9;			// min_niche_cap < Min nichespace dimension capacity
 
 	//let r_magnitude: f64 = 0.1;   // x_min increase as result of ratchet (placeholder)
 
 	// Determine how many n_ss to run
 	let nu = 1.6;       // mean species lifetime (My)
-	let tau = 250.0;     // total simulation time (My)
-	// let t_max: usize = 25000;
+	// let t_max: usize = 100000;
 	let t_max = ((tau / nu) * (n[0] as f64)).ceil() as usize;
 
 	// Cope's Rule parameters
@@ -127,22 +178,63 @@ fn main() {
 	let alpha = 0.30;   // power-law tail
 
 
+	////////////////////////////////////////////////////////////////////////////
+	/////   important functions   //////////////////////////////////////////////
+
+	// Nichespace size determination
+	let new_niche_n = |min_d: f64| {
+		// x: log, y: log
+		// For 69 equines; m_min when niche size = 1: 10^8.205 = 1.603e08
+		// let nc0 = 3.7f64;			// Intercept (log)
+		// let nc1 = -0.45f64;		// Slope for log/log fit (69 equines)
+
+		// For 7 equines; m_min when niche size = 1: 10^6.3 \approx 2e06
+		let nc0 = 3.8f64;
+		let nc1 = -0.6f64;
+
+		// To translate from actual niche size to model's n
+		let scale_factor: f64 = n_0 as f64 / (10f64.powf(nc0 + x_min.log10() * nc1));
+
+		// ((10f64.powf(nc0 + min_d.log10() * nc1)) * scale_factor).round() as usize
+
+		// #MOMsim
+		77
+	};
+
 	// Determines how many more rounds until a species goes extinct
 	// by drawing from a geometric distribution
 	let doom_timer = |mass: f64, n: usize| {
 		// Extinction parameters
-		let beta = 1.0/(n as f64);    // baseline extinction rate
+		let beta = 1.0/(n_0 as f64);    // baseline extinction rate
 		let rho = 0.025;              // rate of extinction increase
 
-		let p = (10.0 as f64).powf(rho * mass.log10() + beta.log10());
+		let mut p = 10f64.powf(rho * mass.log10() + beta.log10());
+		if p.is_nan() {
+			panic!("p is {}.  Inputs: mass = {}, n = {}", p, mass, n);
+			// p = 1.0f64;
+		} else if p > 1.0f64 {
+			p = 1.0f64;
+		}
 
-		let x: f64 = random();
-		(x.log10() / (1.0 - p).log10()).ceil() as usize
+		// (n_0 / n) scales the death length to the timeline of the seed group
+		let d = (random::<f64>().log10() / (1.0 - p).log10()).floor() as usize;
+		if d > 1000000 {
+			panic!("HUGE lifespan: {}.  p_doom = {}", d, p)
+		} else if d > 0 {
+			d
+		} else {
+		   1usize
+		}
 	};
 
-
-	////////////////////////////////////////////////////////////////////////////
-	/////   important functions   //////////////////////////////////////////////
+	// For testing, write out a bunch of death times.
+	// let doom_mass = 21628432820627857924041177728811008f64;
+	// let doom_mass = 26001975398382023000f64;
+	// let doom_n = 3usize;
+	// let mut writer = Writer::from_file(format!("doom_times_{}_{}.csv", doom_mass, doom_n)).unwrap();
+	// for ii in 0..100000 {
+	// 	writer.encode(doom_timer(doom_mass, doom_n)).ok().expect("CSV writer error");
+	// }
 
 	// Takes ancestor mass and returns a new descendant species mass
 	let new_mass = |mass_a: f64, x_min: f64| -> f64 {
@@ -156,22 +248,35 @@ fn main() {
 		}
 
 		// Draw Monte Carlo factor and enforce min size
-		let l1 = mass_a / x_min;
+		let x_max = 10f64.powi(21);	// Prevent overflow?
+
 		let mut tt: f64 = 0.0;
-		while tt < 1.0 / l1 {
+		while tt < x_min / mass_a  || tt > x_max / mass_a {
 			let StandardNormal(r) = random();
 			tt = (r * sigma + mu).exp(); //* 
 			// ((random::<f64>() * (1.0 - 1.0 / l1) + 1.0 / l1).powf(alpha)) /
 			// (random::<f64>().powf(alpha));
 		}
 
+		if (mass_a * tt) > x_max {
+			println!("New species is about to be larger than {} g: mass_a = {}, tt = {}", x_max, mass_a, tt);
+		}
+
+		if (mass_a * tt).is_nan() {
+			panic!("New mass is about to be NaN.\nInputs: mass_a = {}, x_min = {}, tt = {}.", mass_a, x_min, tt);
+		}
+
 		mass_a * tt
 	};
 
-	let choose_anc = |step: usize, extant: &mut Vec<Species>, rec_rat: (f64, usize)| -> (usize, Species) {
+	let choose_anc = |step: usize, extant: &mut Vec<Species>, rec_rat: (f64, usize)| -> Option<(usize, Species)> {
 		let mut ca1 = |extant: &mut Vec<Species>| {
-			let ancestor_loc: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
-			(ancestor_loc, extant[ancestor_loc].clone())
+			if extant.len() > 0 {
+				let ancestor_loc: usize = (random::<f64>() * extant.len() as f64).floor() as usize;
+				Some((ancestor_loc, extant[ancestor_loc].clone()))
+			} else {
+				None
+			}
 		};
 
 		let mut ca2 = |extant: &mut Vec<Species>| {
@@ -180,8 +285,9 @@ fn main() {
 				let ancestor = extant[ancestor_loc].clone();
 				if ancestor.death <= step {
 					extant.remove(ancestor_loc);
+					return None;
 				} else {
-					return (ancestor_loc, ancestor);
+					return Some((ancestor_loc, ancestor));
 				}
 			}
 		};
@@ -195,11 +301,11 @@ fn main() {
 
 				// If the last ratchet wasn't recent, take whoever we chose
 				if step > rec_rat.1 {
-					return (ancestor_loc, ancestor);
+					return Some((ancestor_loc, ancestor));
 
 				// If the last ratchet was recent and we chose a species of the promoted clade
 				} else if ancestor.min_mass == rec_rat.0 {
-					return (ancestor_loc, ancestor);
+					return Some((ancestor_loc, ancestor));
 
 				// If the last ratchet was recent and we chose a species not of that clade
 				} else {
@@ -207,7 +313,7 @@ fn main() {
 					if random::<f64>() < radiation_preference {
 						continue;
 					} else {
-						return (ancestor_loc, ancestor);
+						return Some((ancestor_loc, ancestor));
 					}
 				}
 				choices += 1;
@@ -232,7 +338,7 @@ fn main() {
 		let mut cu1 = |extant: &mut Vec<Species>, step: usize| {
 			// Retain species whose doom timer is later than when we are now
 			// ... that is to say, kill off the now-dead ones
-			extant.retain(|species| species.death >= step);
+			extant.retain(|species| species.death > step);
 		};
 
 		let mut cu2 = |ancestor_loc: usize, extant: &mut Vec<Species>| {
@@ -289,17 +395,41 @@ fn main() {
 
 		// let mut pb = ProgressBar::new(t_max as u64);
 
+		let mut cetacean_flag = true;
+
 		while step <= t_max {
 			// pb.inc();
 
 			for nichespace in 0..extant.len() {
-				let (ancestor_loc, ancestor) = choose_anc(step, &mut extant[nichespace], recent_ratchet);
+				// Downsample our choices from smaller niches so that spec and ext rates match
+				if step % (n[0] / n[nichespace]) > 0 {
+					continue;
+				} else {
+					if model_style == 1 {
+						// Make sure our extant list is currently accurate
+						cleanup(0, &mut extant[nichespace], step);
+					}
+				}
+
+				let (ancestor_loc, ancestor) = match choose_anc(step, &mut extant[nichespace], recent_ratchet) {
+					None => continue,
+					Some(s) => s,
+				};
+
+				// Sanity check!
+				if ancestor.death < step {
+					println!("At step {} we picked something that died {}", step, ancestor.death);
+				}
+				assert!(ancestor.death >= step);
 
 				// Spawn two descendant species
 				for _ in 0..2 {
 					n_s += 1;
 
 					let mass_d = new_mass(ancestor.mass, ancestor.min_mass);
+
+					// Sanity check!
+					assert!(!mass_d.is_nan());
 
 					// See if we've evolved a floor-raising characteristic
 					let min_d: f64;
@@ -312,7 +442,10 @@ fn main() {
 							r_prob
 						};
 
-						if random::<f64>() < r_eff {
+						// #MOMsim
+						// if random::<f64>() < r_eff {
+						if cetacean_flag && step >= (t_max / 4) && mass_d > 6800.0 && mass_d < 7200.0 {
+							cetacean_flag = false;
 							// If we get a ratchet, new mass floor is ancestor mass
 							min_d = mass_d;
 							if model_style == 5 {
@@ -321,16 +454,20 @@ fn main() {
 
 							// If we are allowing new nichespaces...
 							if random::<f64>() < r_niche_prob {
-								niche_d = extant.len();
 
 								// Determine the maximum number of species the new niche can sustain
 								// Decreases linearly with respsect to log(x_min)
-								let n_new: usize = (4234.7f64 + min_d.log10() * -1.0184f64).ceil() as usize;
-								n.push(n_new);
-
-								extant.push(Vec::with_capacity((n_new as f64 * 1.5).ceil() as usize));
-
-								println!("\nCreating new nichespace, {}, with capacity {} and m_min {}", extant.len(), n_new, min_d);
+								let n_new: usize = new_niche_n(min_d);
+								// We can't have niches with space for only one species.
+								if n_new > min_niche_cap {
+									niche_d = extant.len();
+									n.push(n_new);
+									extant.push(Vec::with_capacity((n_new as f64 * 1.5).ceil() as usize));
+									println!("\nCreating new niche dimension, {}, with capacity {} and m_min {}", extant.len(), n_new, min_d);
+								} else {
+									niche_d = ancestor.niche;
+									println!("\nCould have created a new niche dimension, but m_min = {} is too large.", min_d);
+								}
 							} else {
 								niche_d = ancestor.niche;
 							}
@@ -345,6 +482,13 @@ fn main() {
 					}
 
 					let doom = doom_timer(mass_d, n[niche_d]) + step;
+					if (doom - step) > 1000000 {
+						println!("Currently step = {}.\nSpecies of mass {}, in clade with n = {}, won't die until {}", step, mass_d, n[niche_d], doom);
+						for _ in 0..10 {
+							println!("Choosing again gives lifespan of {}.", doom_timer(mass_d, n[niche_d]));
+						}
+						assert!(doom < 1000000);
+					}
 
 					extant[niche_d].push(Species{
 						id: n_s, 
@@ -380,6 +524,19 @@ fn main() {
 					niche: ancestor.niche,
 				};
 
+				if write_all {
+					// Record the fact that this species died here.
+					all_species[ancestor.id - 1] = Species{
+						id: ancestor.id,
+						birth: ancestor.birth,
+						mass: ancestor.mass,
+						min_mass: ancestor.min_mass,
+						death: step,
+						parent: ancestor.parent,
+						niche: ancestor.niche,
+					};
+				}
+
 				// If we are told to, check if we're halfway through the sim, and drop a meteor
 				if model_style == 3 {
 					if step == t_max / 2 {
@@ -396,6 +553,8 @@ fn main() {
 							};
 
 							if random::<f64>() < p_dead {
+								killed += 1;
+
 								extant[nichespace][ii] = Species{
 									id: species.id,
 									birth: species.birth,
@@ -423,8 +582,6 @@ fn main() {
 											niche: spec.niche,
 										};
 								}
-
-								killed += 1;
 							}
 						}
 
@@ -434,10 +591,10 @@ fn main() {
 
 				// Clean up extant, depending on the model 
 				cleanup(ancestor_loc, &mut extant[nichespace], step);
-			}
+			}  // End for nichespaces
 
 			step += 1;
-		}
+		}  // End while < t_max
 
 		if model_style == 2 {
 			// Go through the list once and clean it up by removing everything that's dead
@@ -449,6 +606,9 @@ fn main() {
 		// End timing
 		let end = time::precise_time_ns();
 		// pb.finish_print("Complete\n");
+		for nichespace in 0..extant.len() {
+			println!("Niche {} ended with a capacity of {} and {} extant species.", nichespace, n[nichespace], extant[nichespace].len())
+		}
 		println!("Ran Model {} for {} species in {} seconds.", model_style, n_s, (end - start) as f64 / 1000000000.0);
 
 		// Print out our final set of extant species

@@ -1,3 +1,4 @@
 import os
-for _ in range(1000):
-	os.system("cargo run --release -- -r false -a false".format(ss))
+
+for rr in [0.00005, 0.0005, 0.005]:
+	os.system("cargo run --release -- -p {} -a false -b 100".format(rr))
