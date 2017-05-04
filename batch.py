@@ -1,4 +1,4 @@
 import os
-# for nn in range(500, 10000, 500):
-for ss in [1000, 2000, 5000, 8000, 13000]:
-	os.system("cargo run --release -- -n {0} -a false".format(ss))
+
+for rr in [0.00005, 0.0005, 0.005]:
+	os.system("cargo run --release -- -p {} -a false -b 100".format(rr))
