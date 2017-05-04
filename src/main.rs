@@ -195,7 +195,7 @@ fn main() {
 		// To translate from actual niche size to model's n
 		let scale_factor: f64 = n_0 as f64 / (10f64.powf(nc0 + x_min.log10() * nc1));
 
-		// ((10f64.powf(nc0 + min_d.log10() * nc1)) * scale_factor).round() as usize
+		((10f64.powf(nc0 + min_d.log10() * nc1)) * scale_factor).round() as usize
 
 		// #MOMsim
 		77
